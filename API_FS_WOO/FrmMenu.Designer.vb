@@ -27,16 +27,17 @@ Partial Class FrmMenu
         Me.BtnSalir = New System.Windows.Forms.Button()
         Me.TextApi = New System.Windows.Forms.Label()
         Me.Cmd = New System.Windows.Forms.OpenFileDialog()
+        Me.BtnDescargar = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'Traza
         '
         Me.Traza.Font = New System.Drawing.Font("Courier New", 11.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
-        Me.Traza.Location = New System.Drawing.Point(148, 45)
+        Me.Traza.Location = New System.Drawing.Point(145, 48)
         Me.Traza.Multiline = True
         Me.Traza.Name = "Traza"
         Me.Traza.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
-        Me.Traza.Size = New System.Drawing.Size(1008, 512)
+        Me.Traza.Size = New System.Drawing.Size(1011, 535)
         Me.Traza.TabIndex = 43
         '
         'BtnSalir
@@ -45,7 +46,7 @@ Partial Class FrmMenu
         Me.BtnSalir.ImageAlign = System.Drawing.ContentAlignment.TopLeft
         Me.BtnSalir.Location = New System.Drawing.Point(12, 12)
         Me.BtnSalir.Name = "BtnSalir"
-        Me.BtnSalir.Size = New System.Drawing.Size(104, 41)
+        Me.BtnSalir.Size = New System.Drawing.Size(123, 59)
         Me.BtnSalir.TabIndex = 42
         Me.BtnSalir.Text = "Salir"
         Me.BtnSalir.UseVisualStyleBackColor = True
@@ -54,7 +55,7 @@ Partial Class FrmMenu
         '
         Me.TextApi.AutoSize = True
         Me.TextApi.Font = New System.Drawing.Font("Microsoft Sans Serif", 12.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
-        Me.TextApi.Location = New System.Drawing.Point(144, 12)
+        Me.TextApi.Location = New System.Drawing.Point(141, 12)
         Me.TextApi.Name = "TextApi"
         Me.TextApi.Size = New System.Drawing.Size(62, 20)
         Me.TextApi.TabIndex = 45
@@ -64,11 +65,23 @@ Partial Class FrmMenu
         '
         Me.Cmd.FileName = "Cmd"
         '
+        'BtnDescargar
+        '
+        Me.BtnDescargar.Image = CType(resources.GetObject("BtnDescargar.Image"), System.Drawing.Image)
+        Me.BtnDescargar.ImageAlign = System.Drawing.ContentAlignment.TopLeft
+        Me.BtnDescargar.Location = New System.Drawing.Point(12, 77)
+        Me.BtnDescargar.Name = "BtnDescargar"
+        Me.BtnDescargar.Size = New System.Drawing.Size(123, 59)
+        Me.BtnDescargar.TabIndex = 49
+        Me.BtnDescargar.Text = "Descargar Datos"
+        Me.BtnDescargar.UseVisualStyleBackColor = True
+        '
         'FrmMenu
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1168, 633)
+        Me.ClientSize = New System.Drawing.Size(1168, 589)
+        Me.Controls.Add(Me.BtnDescargar)
         Me.Controls.Add(Me.TextApi)
         Me.Controls.Add(Me.Traza)
         Me.Controls.Add(Me.BtnSalir)
@@ -83,4 +96,5 @@ Partial Class FrmMenu
     Friend WithEvents BtnSalir As Button
     Friend WithEvents TextApi As Label
     Friend WithEvents Cmd As OpenFileDialog
+    Friend WithEvents BtnDescargar As Button
 End Class

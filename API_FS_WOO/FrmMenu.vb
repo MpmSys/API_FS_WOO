@@ -1,8 +1,10 @@
 ﻿Imports System.IO
+Imports System.Net
 Imports System.Net.Http
 Imports System.Net.Http.Headers
-Imports Newtonsoft.Json
 Imports System.Text
+Imports Newtonsoft.Json
+Imports System.Linq
 
 Public Class FrmMenu
 
@@ -103,115 +105,93 @@ Public Class FrmMenu
         End
     End Sub
 
-    Private Sub BtnDescargar_Click(sender As Object, e As EventArgs) Handles BtnDescargar.Click
+    Private Async Sub BtnDescargar_Click(sender As Object, e As EventArgs) Handles BtnDescargar.Click
 
-        Dim BaseUrl As String = WebWoo & "/wp-json/wc/v3/"
+        ' Configuración de la API de WooCommerce
+        Dim BaseUrl As String = WebWoo.TrimEnd("/"c) & "/wp-json/wc/v3/"
         Dim ConsumerKey As String = ClaveWoo
         Dim ConsumerSecret As String = PassWoo
 
-        Debug.Print("BaseUrl: " & BaseUrl)
-        Debug.Print("ConsumerKey: " & ConsumerKey)
-        Debug.Print("ConsumerSecret: " & ConsumerSecret)
+        ' Seguridad: TLS 1.2 (requerido por la mayoría de hosts)
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
 
-        ' Crear HttpClientHandler para manejar SSL/TLS
-        Dim handler As New HttpClientHandler()
-        handler.ServerCertificateCustomValidationCallback = Function(sender2, cert, chain, sslPolicyErrors) True
+        ' Cliente HTTP con descompresión automática
+        Dim handler As New HttpClientHandler() With {
+            .AutomaticDecompression = DecompressionMethods.GZip Or DecompressionMethods.Deflate
+        }
 
-        Dim httpClient As New HttpClient(handler)
-        httpClient.Timeout = TimeSpan.FromSeconds(60)
+        Using client As New HttpClient(handler)
+            client.Timeout = TimeSpan.FromSeconds(60)
+            client.BaseAddress = New Uri(BaseUrl)
 
-        ' Configurar headers
-        httpClient.DefaultRequestHeaders.Accept.Clear()
-        httpClient.DefaultRequestHeaders.Accept.Add(New MediaTypeWithQualityHeaderValue("application/json"))
-        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            ' Encabezados comunes
+            client.DefaultRequestHeaders.Accept.Clear()
+            client.DefaultRequestHeaders.Accept.Add(New MediaTypeWithQualityHeaderValue("application/json"))
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
 
-        ' NO usar Basic Auth - WooCommerce prefiere credenciales en URL
-        ' Agregar headers adicionales
-        httpClient.DefaultRequestHeaders.Add("Cache-Control", "no-cache")
+            Dim page As Integer = 1
+            Dim totalPages As Integer = 1
+            Dim pedidos As New List(Of Object)()
 
-        Dim page As Integer = 1
-        Dim pedidos As New List(Of Object)()
-        Dim morePages As Boolean = True
-
-        ' Bucle para obtener todas las páginas de pedidos
-        Traza.Text = Traza.Text & "Iniciando descarga de pedidos..." & vbCrLf
-        Traza.Refresh()
-
-        While morePages
-
-            ' URL CON credenciales en query string (método recomendado para WooCommerce)
-            Dim url As String = $"{BaseUrl}orders?consumer_key={ConsumerKey}&consumer_secret={ConsumerSecret}&per_page=50&page={page}&orderby=id&order=asc"
-
-            Traza.Text = Traza.Text & $"Solicitando página {page}..." & vbCrLf
+            Traza.AppendText("Iniciando descarga de pedidos..." & vbCrLf)
             Traza.Refresh()
 
             Try
-                ' Realizar la solicitud GET de forma asíncrona
-                Dim response As HttpResponseMessage = httpClient.GetAsync(url).Result
+                Do
+                    ' ✅ Credenciales como parámetros de URL (como funciona en el navegador)
+                    Dim url = $"orders?consumer_key={ConsumerKey}&consumer_secret={ConsumerSecret}&per_page=50&page={page}&orderby=id&order=asc"
 
-                ' Mostrar información de respuesta para debugging
-                Traza.Text = Traza.Text & $"Status Code: {response.StatusCode}" & vbCrLf
+                    Traza.AppendText($"Solicitando página {page}..." & vbCrLf)
+                    Traza.Refresh()
 
-                If response.IsSuccessStatusCode Then
-                    Dim jsonResponse As String = response.Content.ReadAsStringAsync().Result
-                    Dim pageOrders As List(Of Object) = JsonConvert.DeserializeObject(Of List(Of Object))(jsonResponse)
+                    Dim resp As HttpResponseMessage = Await client.GetAsync(url).ConfigureAwait(True)
 
-                    ' Agregar los pedidos obtenidos a la lista principal
+                    Traza.AppendText($"Status Code: {CInt(resp.StatusCode)} {resp.StatusCode}" & vbCrLf)
+                    Traza.Refresh()
+
+                    If Not resp.IsSuccessStatusCode Then
+                        Dim bodyErr = Await resp.Content.ReadAsStringAsync().ConfigureAwait(True)
+                        Traza.AppendText($"Error: {bodyErr}" & vbCrLf)
+                        Traza.Refresh()
+                        Exit Do
+                    End If
+
+                    ' Paginación desde cabeceras (si están presentes)
+                    If resp.Headers.Contains("X-WP-TotalPages") Then
+                        Integer.TryParse(resp.Headers.GetValues("X-WP-TotalPages").FirstOrDefault(), totalPages)
+                    End If
+
+                    Dim json As String = Await resp.Content.ReadAsStringAsync().ConfigureAwait(True)
+                    Dim pageOrders As List(Of Object) = JsonConvert.DeserializeObject(Of List(Of Object))(json)
+
                     pedidos.AddRange(pageOrders)
 
-                    Traza.Text = Traza.Text & $"Descargados {pageOrders.Count} pedidos de la página {page}" & vbCrLf
-                    Traza.Refresh()
+                    Traza.AppendText($"Descargados {pageOrders.Count} pedidos (página {page} de {totalPages})" & vbCrLf)
 
-                    ' Verificar si hay más páginas
-                    If pageOrders.Count < 50 Then
-                        morePages = False ' No hay más páginas si se obtienen menos de 50 pedidos
-                    Else
-                        page += 1 ' Incrementar el número de página para la siguiente solicitud
+                    ' Si el host no envía X-WP-TotalPages, cortamos por cuenta
+                    If Not resp.Headers.Contains("X-WP-TotalPages") AndAlso pageOrders.Count < 50 Then
+                        Exit Do
                     End If
-                Else
-                    ' Mostrar información detallada del error   
-                    Dim errorContent As String = response.Content.ReadAsStringAsync().Result
-                    Traza.Text = Traza.Text & $"Error {response.StatusCode}: {response.ReasonPhrase}" & vbCrLf
-                    Traza.Text = Traza.Text & $"Detalle: {errorContent}" & vbCrLf
-                    Traza.Refresh()
-                    morePages = False ' Detener el bucle en caso de error en la solicitud
 
-                    MsgBox($"Error al descargar pedidos: {response.StatusCode} - {response.ReasonPhrase}" & vbCrLf & vbCrLf & "Verifique:" & vbCrLf & "- Consumer Key y Secret correctos" & vbCrLf & "- Permisos de lectura en WooCommerce" & vbCrLf & "- URL correcta", vbCritical, "Error de API")
-                End If
+                    page += 1
+                Loop While page <= totalPages
 
+            Catch ex As TaskCanceledException
+                Traza.AppendText($"Timeout: {ex.Message}" & vbCrLf)
+                MsgBox("Se agotó el tiempo de espera al conectar con la API.", vbExclamation, "Timeout")
             Catch ex As Exception
-                Traza.Text = Traza.Text & $"Excepción: {ex.Message}" & vbCrLf
-                Traza.Text = Traza.Text & $"Stack Trace: {ex.StackTrace}" & vbCrLf
-                Traza.Refresh()
-                morePages = False
-
+                Traza.AppendText($"Excepción: {ex.Message}" & vbCrLf & ex.StackTrace & vbCrLf)
                 MsgBox($"Error de conexión: {ex.Message}", vbCritical, "Error")
             End Try
 
-        End While
+            Traza.AppendText(vbCrLf & $"Total de pedidos descargados: {pedidos.Count}" & vbCrLf & vbCrLf)
 
-        ' Procesar los pedidos obtenidos
-        Traza.Text = Traza.Text & vbCrLf & $"Total de pedidos descargados: {pedidos.Count}" & vbCrLf & vbCrLf
-        Traza.Refresh()
-
-        For Each pedido In pedidos
-            ' Extraemos los campos
-            ' Id del pedido
-            ' Status del pedido
-            ' date_created
-            ' payment_method
-            ' payment_method_title
-            ' date_paid
-            ' total
-            ' total_tax
-
-            Traza.Text = Traza.Text & Newtonsoft.Json.JsonConvert.SerializeObject(pedido) & vbCrLf & vbCrLf
-            Traza.Refresh()
-
-        Next
-
-        httpClient.Dispose()
-
+            ' Muestra cada pedido
+            For Each pedido In pedidos
+                Traza.AppendText(JsonConvert.SerializeObject(pedido) & vbCrLf & vbCrLf)
+            Next
+        End Using
     End Sub
+
 
 End Class

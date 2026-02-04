@@ -46,7 +46,7 @@ Partial Class FrmMenu
         Me.BtnSalir.ImageAlign = System.Drawing.ContentAlignment.TopLeft
         Me.BtnSalir.Location = New System.Drawing.Point(12, 12)
         Me.BtnSalir.Name = "BtnSalir"
-        Me.BtnSalir.Size = New System.Drawing.Size(123, 59)
+        Me.BtnSalir.Size = New System.Drawing.Size(123, 68)
         Me.BtnSalir.TabIndex = 42
         Me.BtnSalir.Text = "Salir"
         Me.BtnSalir.UseVisualStyleBackColor = True
@@ -69,11 +69,11 @@ Partial Class FrmMenu
         '
         Me.BtnDescargar.Image = CType(resources.GetObject("BtnDescargar.Image"), System.Drawing.Image)
         Me.BtnDescargar.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnDescargar.Location = New System.Drawing.Point(12, 77)
+        Me.BtnDescargar.Location = New System.Drawing.Point(12, 93)
         Me.BtnDescargar.Name = "BtnDescargar"
-        Me.BtnDescargar.Size = New System.Drawing.Size(123, 59)
+        Me.BtnDescargar.Size = New System.Drawing.Size(123, 68)
         Me.BtnDescargar.TabIndex = 49
-        Me.BtnDescargar.Text = "Descargar Datos"
+        Me.BtnDescargar.Text = "Descargar Todos los Pedidos"
         Me.BtnDescargar.UseVisualStyleBackColor = True
         '
         'FrmMenu

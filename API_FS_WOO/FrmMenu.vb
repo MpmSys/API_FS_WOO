@@ -22,6 +22,7 @@ Public Class FrmMenu
     Dim ReaderAcc3 As OleDb.OleDbDataReader
 
     Dim X As Integer
+    Dim WebId As String
     Dim WebFs As String
     Dim WebWoo As String
     Dim ClaveFs As String
@@ -89,6 +90,7 @@ Public Class FrmMenu
                 ClaveFs = ReaderAcc1("API").ToString()
                 ClaveWoo = ReaderAcc1("CK").ToString()
                 PassWoo = ReaderAcc1("CS").ToString()
+                WebId = ReaderAcc1("IDWEB").ToString()
 
                 Traza.Text = WebFs & vbCrLf & WebWoo & vbCrLf
             End If
@@ -106,6 +108,12 @@ Public Class FrmMenu
     End Sub
 
     Private Async Sub BtnDescargar_Click(sender As Object, e As EventArgs) Handles BtnDescargar.Click
+
+        ' Abrimos la conexión a la base de datos para cargar o mantener la tabla Pedidos
+
+        Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
+        Dim conn As New OleDb.OleDbConnection(connString)
+        conn.Open()
 
         ' Configuración de la API de WooCommerce
         Dim BaseUrl As String = WebWoo.TrimEnd("/"c) & "/wp-json/wc/v3/"
@@ -133,6 +141,7 @@ Public Class FrmMenu
             Dim totalPages As Integer = 1
             Dim pedidos As New List(Of Object)()
 
+            Traza.Text = ""
             Traza.AppendText("Iniciando descarga de pedidos..." & vbCrLf)
             Traza.Refresh()
 
@@ -174,6 +183,9 @@ Public Class FrmMenu
                     End If
 
                     page += 1
+
+                    If page > 3 Then Exit Do ' Límite de páginas para pruebas
+
                 Loop While page <= totalPages
 
             Catch ex As TaskCanceledException
@@ -184,13 +196,80 @@ Public Class FrmMenu
                 MsgBox($"Error de conexión: {ex.Message}", vbCritical, "Error")
             End Try
 
+            Traza.Text = "" ' Limpiar traza antes de mostrar resultados
             Traza.AppendText(vbCrLf & $"Total de pedidos descargados: {pedidos.Count}" & vbCrLf & vbCrLf)
 
             ' Muestra cada pedido
             For Each pedido In pedidos
-                Traza.AppendText(JsonConvert.SerializeObject(pedido) & vbCrLf & vbCrLf)
+                ' Mostramos los valores de los campos principales del pedido
+                ' Id - status - total - fecha de creación - metodo de pago - titulo de metodo de pago y fecha de pago
+
+                Dim idpedido As String = pedido("id").ToString()
+                Dim status As String = pedido("status").ToString()
+                Dim total As String = pedido("total").ToString()
+                Dim fechaCreacion As String = pedido("date_created").ToString()
+                Dim metodoPago As String = pedido("payment_method").ToString()
+                Dim tituloMetodoPago As String = pedido("payment_method_title").ToString()
+                Dim fechaPago As String = pedido("date_paid").ToString()
+
+                Traza.AppendText($"ID: {idpedido}, Status: {status}, Total: {total}, Fecha Creación: {fechaCreacion}, " &
+                                 $"Método Pago: {metodoPago} ({tituloMetodoPago}), Fecha Pago: {fechaPago}" & vbCrLf)
+                Traza.Refresh()
+
+                ' si el pedido esta en la tabla Pedidos , lo actualizamos, si no, lo insertamos.
+                ' Para esto, usamos el los valores IdWeb y el campo ID del pedido como referencia llave doble para identificar el pedido.
+                Dim cmd As New OleDb.OleDbCommand("SELECT COUNT(*) FROM Pedidos WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
+                cmd.Parameters.AddWithValue("@IdWeb", WebId)
+                cmd.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
+                Dim count As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+
+                ' si la fecha de pago es vacia, la ponemos a 01/01/1900 para evitar errores de conversion
+                If String.IsNullOrEmpty(fechaPago) Then
+                    fechaPago = "01/01/1900"
+                End If
+
+                ' el valor de total lo convertimos a double. Hay que cambiar el punto por la coma si es necesario
+                Dim totalDouble As Double
+                If Not Double.TryParse(total.Replace(".", ","), totalDouble) Then
+                    totalDouble = 0
+                End If
+
+                If count > 0 Then
+                    ' Actualizar pedido existente
+                    Dim updateCmd As New OleDb.OleDbCommand("UPDATE Pedidos SET Status = @Status, Total = @Total, FechaCreacion = @FechaCreacion, " &
+                                                             "MetodoPago = @MetodoPago, TituloMetodoPago = @TituloMetodoPago, FechaPago = @FechaPago " &
+                                                             "WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
+                    updateCmd.Parameters.AddWithValue("@Status", status)
+                    updateCmd.Parameters.AddWithValue("@Total", totalDouble)
+                    updateCmd.Parameters.AddWithValue("@FechaCreacion", fechaCreacion)
+                    updateCmd.Parameters.AddWithValue("@MetodoPago", metodoPago)
+                    updateCmd.Parameters.AddWithValue("@TituloMetodoPago", tituloMetodoPago)
+                    updateCmd.Parameters.AddWithValue("@FechaPago", fechaPago)
+                    updateCmd.Parameters.AddWithValue("@IdWeb", WebId)
+                    updateCmd.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
+                    updateCmd.ExecuteNonQuery()
+                Else
+                    ' Insertar nuevo pedido
+                    Dim insertCmd As New OleDb.OleDbCommand("INSERT INTO Pedidos (IdWeb, IdPedido, Status, Total, FechaCreacion, MetodoPago, TituloMetodoPago, FechaPago) " &
+                                                             "VALUES (@IdWeb, @IdPedido, @Status, @Total, @FechaCreacion, @MetodoPago, @TituloMetodoPago, @FechaPago)", conn)
+                    insertCmd.Parameters.AddWithValue("@IdWeb", WebId)
+                    insertCmd.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
+                    insertCmd.Parameters.AddWithValue("@Status", status)
+                    insertCmd.Parameters.AddWithValue("@Total", totalDouble)
+                    insertCmd.Parameters.AddWithValue("@FechaCreacion", fechaCreacion)
+                    insertCmd.Parameters.AddWithValue("@MetodoPago", metodoPago)
+                    insertCmd.Parameters.AddWithValue("@TituloMetodoPago", tituloMetodoPago)
+                    insertCmd.Parameters.AddWithValue("@FechaPago", fechaPago)
+                    insertCmd.ExecuteNonQuery()
+                End If
+
             Next
         End Using
+
+        ' Cerramos la conexión a la base de datos
+        conn.Close()
+
+
     End Sub
 
 

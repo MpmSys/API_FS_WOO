@@ -184,7 +184,7 @@ Public Class FrmMenu
 
                     page += 1
 
-                    If page > 3 Then Exit Do ' Límite de páginas para pruebas
+                    'If page > 3 Then Exit Do ' Límite de páginas para pruebas
 
                 Loop While page <= totalPages
 
@@ -211,6 +211,7 @@ Public Class FrmMenu
                 Dim metodoPago As String = pedido("payment_method").ToString()
                 Dim tituloMetodoPago As String = pedido("payment_method_title").ToString()
                 Dim fechaPago As String = pedido("date_paid").ToString()
+                Dim fechacierre As String = pedido("date_completed").ToString()
 
                 Traza.AppendText($"ID: {idpedido}, Status: {status}, Total: {total}, Fecha Creación: {fechaCreacion}, " &
                                  $"Método Pago: {metodoPago} ({tituloMetodoPago}), Fecha Pago: {fechaPago}" & vbCrLf)
@@ -228,6 +229,11 @@ Public Class FrmMenu
                     fechaPago = "01/01/1900"
                 End If
 
+                ' si la fecha de cierre es vacia, la ponemos a 01/01/1900 para evitar errores de conversion
+                If String.IsNullOrEmpty(fechacierre) Then
+                    fechacierre = "01/01/1900"
+                End If
+
                 ' el valor de total lo convertimos a double. Hay que cambiar el punto por la coma si es necesario
                 Dim totalDouble As Double
                 If Not Double.TryParse(total.Replace(".", ","), totalDouble) Then
@@ -237,7 +243,7 @@ Public Class FrmMenu
                 If count > 0 Then
                     ' Actualizar pedido existente
                     Dim updateCmd As New OleDb.OleDbCommand("UPDATE Pedidos SET Status = @Status, Total = @Total, FechaCreacion = @FechaCreacion, " &
-                                                             "MetodoPago = @MetodoPago, TituloMetodoPago = @TituloMetodoPago, FechaPago = @FechaPago " &
+                                                             "MetodoPago = @MetodoPago, TituloMetodoPago = @TituloMetodoPago, FechaPago = @FechaPago, FechaCierre = @FechaCierre " &
                                                              "WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
                     updateCmd.Parameters.AddWithValue("@Status", status)
                     updateCmd.Parameters.AddWithValue("@Total", totalDouble)
@@ -245,13 +251,14 @@ Public Class FrmMenu
                     updateCmd.Parameters.AddWithValue("@MetodoPago", metodoPago)
                     updateCmd.Parameters.AddWithValue("@TituloMetodoPago", tituloMetodoPago)
                     updateCmd.Parameters.AddWithValue("@FechaPago", fechaPago)
+                    updateCmd.Parameters.AddWithValue("@FechaCierre", fechacierre)
                     updateCmd.Parameters.AddWithValue("@IdWeb", WebId)
                     updateCmd.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
                     updateCmd.ExecuteNonQuery()
                 Else
                     ' Insertar nuevo pedido
-                    Dim insertCmd As New OleDb.OleDbCommand("INSERT INTO Pedidos (IdWeb, IdPedido, Status, Total, FechaCreacion, MetodoPago, TituloMetodoPago, FechaPago) " &
-                                                             "VALUES (@IdWeb, @IdPedido, @Status, @Total, @FechaCreacion, @MetodoPago, @TituloMetodoPago, @FechaPago)", conn)
+                    Dim insertCmd As New OleDb.OleDbCommand("INSERT INTO Pedidos (IdWeb, IdPedido, Status, Total, FechaCreacion, MetodoPago, TituloMetodoPago, FechaPago, FechaCierre) " &
+                                                             "VALUES (@IdWeb, @IdPedido, @Status, @Total, @FechaCreacion, @MetodoPago, @TituloMetodoPago, @FechaPago, @FechaCierre)", conn)
                     insertCmd.Parameters.AddWithValue("@IdWeb", WebId)
                     insertCmd.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
                     insertCmd.Parameters.AddWithValue("@Status", status)
@@ -260,6 +267,7 @@ Public Class FrmMenu
                     insertCmd.Parameters.AddWithValue("@MetodoPago", metodoPago)
                     insertCmd.Parameters.AddWithValue("@TituloMetodoPago", tituloMetodoPago)
                     insertCmd.Parameters.AddWithValue("@FechaPago", fechaPago)
+                    insertCmd.Parameters.AddWithValue("@FechaCierre", fechacierre)
                     insertCmd.ExecuteNonQuery()
                 End If
 

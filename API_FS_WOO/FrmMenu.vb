@@ -29,6 +29,55 @@ Public Class FrmMenu
     Dim ClaveWoo As String
     Dim PassWoo As String
 
+    Public Class CRUDMethod
+        Public Shared Create As String = "POST"
+        Public Shared Read As String = "GET"
+        Public Shared Update As String = "PUT"
+        Public Shared Delete As String = "DELETE"
+    End Class
+
+    Public Function LeerApi(RequestURL As String) As String
+
+        Dim WebRequest As HttpWebRequest
+        Dim Reader As StreamReader
+        Dim Response As HttpWebResponse
+
+        'Dim NumCabeceras As Integer
+
+        Dim ApiLoc As String
+        Dim StrData As String
+
+        TextApi.Text = BaseDatos
+        TextApi.Refresh()
+        '
+        ' Lectura API
+        '
+        Debug.Print(RequestURL)
+
+        ApiLoc = "Token:" & ClaveFs
+
+        WebRequest = DirectCast(System.Net.WebRequest.Create(RequestURL), HttpWebRequest)
+        WebRequest.Method = CRUDMethod.Read
+        WebRequest.Headers.Add(ApiLoc)
+
+        Try
+            Response = DirectCast(WebRequest.GetResponse(), HttpWebResponse)
+            Reader = New StreamReader(Response.GetResponseStream())
+            StrData = Reader.ReadToEnd()
+            Reader.Close()
+            'For NumCabeceras = 1 To Response.Headers.Count - 1
+            '    Debug.Print(NumCabeceras & " " & Response.Headers(NumCabeceras).ToString)
+            'Next
+        Catch ex As Exception
+            Traza.Text += "Acceso a API FacturaScript " & vbCrLf & RequestURL & vbCrLf & ex.ToString & vbCrLf
+            StrData = ""
+        End Try
+
+        Debug.Print(StrData)
+        LeerApi = StrData
+
+    End Function
+
     Private Sub FrmMenu_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
         Dim Fichero As String
@@ -277,8 +326,73 @@ Public Class FrmMenu
         ' Cerramos la conexión a la base de datos
         conn.Close()
 
-
     End Sub
 
+    Private Sub BtnStock_Click(sender As Object, e As EventArgs) Handles BtnStock.Click
+
+        ' Abrimos la conexión a la base de datos para cargar o mantener la tabla Pedidos
+        Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
+        Dim conn As New OleDb.OleDbConnection(connString)
+        conn.Open()
+
+        ' Borramos los productos de la tabla Stock para mantener solo los productos actuales con IDWEB = IdWeb
+        Dim deleteCmd As New OleDb.OleDbCommand("DELETE FROM Stock WHERE IdWeb= @IdWeb", conn)
+        deleteCmd.Parameters.AddWithValue("@IdWeb", WebId)
+        deleteCmd.ExecuteNonQuery()
+
+        Traza.AppendText(deleteCmd.CommandText & " " & WebId)
+        Traza.Refresh()
+
+        ' Leemos de la API de FacturaScripts los productos y sus variantes para obtener el stock actual de cada variante.
+        ' Para esto, usamos la ruta "variantes" de la API de FacturaScripts.
+        ' La ruta "variantes" devuelve un array de objetos con los campos IdProducto, IdVariante, descripcion, referencia y stock.
+        ' La descripcion está en la tabla productos
+        ' La lectura se realizará paginada
+
+        ' URL de la API de FacturaScripts UrlFs + "/api/3/ 
+        ' Lectura API de FacturaScripts con la función LeerApi y la ruta "variantes" UrlFs + "/api/3/variantes?per_page=50&page=1"
+
+        Dim page As Integer = 1
+        Dim totalPages As Integer = 1
+        Dim variantes As New List(Of Object)()
+
+        Traza.Text = ""
+        Traza.AppendText("Iniciando descarga de variantes..." & vbCrLf)
+        Traza.Refresh()
+
+        Try
+            Do
+                Dim url = WebFs.TrimEnd("/"c) & $"/api/3/variantes?per_page=50&page={page}"
+                Traza.AppendText($"Solicitando página {page}..." & vbCrLf)
+                Traza.Refresh()
+                Dim json As String = LeerApi(url)
+                Dim pageVariantes As List(Of Object) = JsonConvert.DeserializeObject(Of List(Of Object))(json)
+                variantes.AddRange(pageVariantes)
+                Traza.AppendText($"Descargadas {pageVariantes.Count} variantes (página {page})" & vbCrLf)
+                Traza.Refresh()
+                ' Si el host no envía X-WP-TotalPages, cortamos por cuenta
+                If pageVariantes.Count < 50 Then
+                    Exit Do
+                End If
+                page += 1
+            Loop While True
+        Catch ex As Exception
+            Traza.AppendText($"Excepción: {ex.Message}" & vbCrLf & ex.StackTrace & vbCrLf)
+            MsgBox($"Error de conexión: {ex.Message}", vbCritical, "Error")
+        End Try
+
+
+
+
+
+
+
+
+
+
+        ' Cerramos la conexión a la base de datos
+        conn.Close()
+
+    End Sub
 
 End Class

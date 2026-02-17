@@ -28,7 +28,6 @@ Partial Class FrmMenu
         Me.TextApi = New System.Windows.Forms.Label()
         Me.Cmd = New System.Windows.Forms.OpenFileDialog()
         Me.BtnDescargar = New System.Windows.Forms.Button()
-        Me.BtnStock = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'Traza
@@ -47,7 +46,7 @@ Partial Class FrmMenu
         Me.BtnSalir.ImageAlign = System.Drawing.ContentAlignment.TopLeft
         Me.BtnSalir.Location = New System.Drawing.Point(12, 12)
         Me.BtnSalir.Name = "BtnSalir"
-        Me.BtnSalir.Size = New System.Drawing.Size(123, 101)
+        Me.BtnSalir.Size = New System.Drawing.Size(123, 68)
         Me.BtnSalir.TabIndex = 42
         Me.BtnSalir.Text = "Salir"
         Me.BtnSalir.UseVisualStyleBackColor = True
@@ -70,30 +69,18 @@ Partial Class FrmMenu
         '
         Me.BtnDescargar.Image = CType(resources.GetObject("BtnDescargar.Image"), System.Drawing.Image)
         Me.BtnDescargar.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnDescargar.Location = New System.Drawing.Point(12, 113)
+        Me.BtnDescargar.Location = New System.Drawing.Point(12, 93)
         Me.BtnDescargar.Name = "BtnDescargar"
-        Me.BtnDescargar.Size = New System.Drawing.Size(123, 101)
+        Me.BtnDescargar.Size = New System.Drawing.Size(123, 68)
         Me.BtnDescargar.TabIndex = 49
         Me.BtnDescargar.Text = "Descargar Todos los Pedidos"
         Me.BtnDescargar.UseVisualStyleBackColor = True
-        '
-        'BtnStock
-        '
-        Me.BtnStock.Image = CType(resources.GetObject("BtnStock.Image"), System.Drawing.Image)
-        Me.BtnStock.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnStock.Location = New System.Drawing.Point(12, 214)
-        Me.BtnStock.Name = "BtnStock"
-        Me.BtnStock.Size = New System.Drawing.Size(123, 101)
-        Me.BtnStock.TabIndex = 50
-        Me.BtnStock.Text = "Control Stock"
-        Me.BtnStock.UseVisualStyleBackColor = True
         '
         'FrmMenu
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1168, 589)
-        Me.Controls.Add(Me.BtnStock)
         Me.Controls.Add(Me.BtnDescargar)
         Me.Controls.Add(Me.TextApi)
         Me.Controls.Add(Me.Traza)
@@ -110,5 +97,4 @@ Partial Class FrmMenu
     Friend WithEvents TextApi As Label
     Friend WithEvents Cmd As OpenFileDialog
     Friend WithEvents BtnDescargar As Button
-    Friend WithEvents BtnStock As Button
 End Class

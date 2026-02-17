@@ -1,10 +1,11 @@
 ﻿Imports System.IO
+Imports System.Linq
 Imports System.Net
 Imports System.Net.Http
 Imports System.Net.Http.Headers
 Imports System.Text
 Imports Newtonsoft.Json
-Imports System.Linq
+Imports Newtonsoft.Json.Linq
 
 Public Class FrmMenu
 
@@ -28,6 +29,277 @@ Public Class FrmMenu
     Dim ClaveFs As String
     Dim ClaveWoo As String
     Dim PassWoo As String
+
+    Dim TotalReg As Long
+    Dim NumReg As Long
+    Dim ApiVal As String
+    Dim Offset As Long
+
+    Public Class CRUDMethod
+        Public Shared Create As String = "POST"
+        Public Shared Read As String = "GET"
+        Public Shared Update As String = "PUT"
+        Public Shared Delete As String = "DELETE"
+    End Class
+
+    Public Function LeerApi(RequestURL As String, Optional ApiOrigen As String = "") As String
+
+        Dim WebRequest As HttpWebRequest
+        Dim Reader As StreamReader
+        Dim Response As HttpWebResponse
+
+        Dim ApiLoc As String
+        Dim StrData As String
+
+        ' Inicializar contadores para evitar valores previos
+        TotalReg = 0
+        NumReg = 0
+
+        TextApi.Text = BaseDatos
+        TextApi.Refresh()
+        '
+        ' Lectura API
+        '
+        Debug.Print(RequestURL)
+
+        ApiLoc = "Token:" & ApiVal
+        If ApiOrigen <> "" Then
+            ApiLoc = "Token:" & ApiOrigen
+        End If
+
+        WebRequest = DirectCast(System.Net.WebRequest.Create(RequestURL), HttpWebRequest)
+        WebRequest.Method = CRUDMethod.Read
+        WebRequest.Headers.Add(ApiLoc)
+
+        Try
+            '
+            ' Realizamos la petición y devolvemos los siguientes datos
+            ' StrData = Respuesta de la API
+            ' TotalReg = Número total de registros (cabecera X-Total-Count)
+            ' NumReg = Número de registros devueltos en la consulta
+            '
+            Response = DirectCast(WebRequest.GetResponse(), HttpWebResponse)
+            Reader = New StreamReader(Response.GetResponseStream())
+            StrData = Reader.ReadToEnd()
+            Reader.Close()
+
+            ' Intentar leer la cabecera X-Total-Count
+            Try
+                Dim totalHeader As String = Response.Headers("X-Total-Count")
+                If Not String.IsNullOrEmpty(totalHeader) Then
+                    Long.TryParse(totalHeader, TotalReg)
+                End If
+            Catch exHdr As Exception
+                ' Si no existe o no se puede parsear, mantener TotalReg = 0
+            End Try
+
+            ' Intentar contar registros si la respuesta es un array JSON
+            If Not String.IsNullOrWhiteSpace(StrData) Then
+                Try
+                    Dim lecturaJson As JArray = JArray.Parse(StrData.ToString)
+                    NumReg = lecturaJson.Count
+                Catch exJson As Exception
+                    ' No es un array JSON o parseo fallido: dejar NumReg = 0
+                End Try
+            End If
+
+        Catch ex As Exception
+            Traza.Text += "LeerApi FacturaScript " & vbCrLf & RequestURL & vbCrLf & ex.ToString & vbCrLf
+            StrData = ""
+        End Try
+
+        Debug.Print(StrData)
+        LeerApi = StrData
+
+    End Function
+
+    Public Function ActualizarApi(RequestURL As String, StrData As String) As String
+
+        Dim WebRequest As HttpWebRequest
+        Dim Reader As StreamReader
+        Dim Response As HttpWebResponse
+        Dim StrDataRes As String = ""
+
+        Dim ApiLoc As String
+
+        ' Inicializar contadores para evitar valores previos
+        TotalReg = 0
+        NumReg = 0
+
+        TextApi.Text = BaseDatos
+        TextApi.Refresh()
+        '
+        ' Preparar la petición para enviar datos como form URL encoded
+        '
+        Debug.Print(RequestURL)
+
+        ApiLoc = "Token:" & ApiVal
+
+        WebRequest = DirectCast(System.Net.WebRequest.Create(RequestURL), HttpWebRequest)
+        WebRequest.Method = CRUDMethod.Update
+        WebRequest.Headers.Add(ApiLoc)
+
+        ' Convertir StrData JSON a application/x-www-form-urlencoded si es necesario
+        Dim postData As String = ""
+        If Not String.IsNullOrWhiteSpace(StrData) Then
+            Try
+                ' Intentar parsear como JSON
+                Dim jo As JObject = JObject.Parse(StrData)
+                Dim parts As New System.Collections.Generic.List(Of String)
+                For Each prop As JProperty In jo.Properties()
+                    Dim name As String = prop.Name
+                    Dim value As String = If(prop.Value Is Nothing, "", prop.Value.ToString())
+                    parts.Add(Uri.EscapeDataString(name) & "=" & Uri.EscapeDataString(value))
+                Next
+                postData = String.Join("&", parts)
+            Catch ex As Exception
+                ' No es JSON: asumir que ya es form-url-encoded
+                postData = StrData
+            End Try
+        End If
+
+        WebRequest.ContentType = "application/x-www-form-urlencoded"
+        Dim dataBytes() As Byte = System.Text.Encoding.UTF8.GetBytes(postData)
+        WebRequest.ContentLength = dataBytes.Length
+
+        Try
+            Using requestStream As System.IO.Stream = WebRequest.GetRequestStream()
+                requestStream.Write(dataBytes, 0, dataBytes.Length)
+                requestStream.Flush()
+            End Using
+
+            '
+            ' procesamos la perciobn WebRequest y recogemos la respuesta
+            '
+            Response = DirectCast(WebRequest.GetResponse(), HttpWebResponse)
+            Reader = New StreamReader(Response.GetResponseStream())
+            StrDataRes = Reader.ReadToEnd()
+            Reader.Close()
+
+        Catch ex As Exception
+            Traza.Text += "ActualizarApi FacturaScript " & vbCrLf & RequestURL & vbCrLf & ex.ToString & vbCrLf
+            StrDataRes = ""
+        End Try
+
+        Debug.Print(StrDataRes)
+        ActualizarApi = StrDataRes
+
+    End Function
+
+    Private Function NormalizeJsonString(input As String) As String
+        If String.IsNullOrWhiteSpace(input) Then
+            Return input
+        End If
+
+        Dim s As String = input.Trim()
+
+        ' Reemplazar True/False por true/false (coincidencia de palabra, case-insensitive)
+        s = System.Text.RegularExpressions.Regex.Replace(s, "\bTrue\b", "true", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+        s = System.Text.RegularExpressions.Regex.Replace(s, "\bFalse\b", "false", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+
+        ' Reemplazar comillas simples por dobles (solo cuando parezcan delimitar cadenas)
+        ' Evitar tocar apostrofes dentro de cadenas ya entre dobles.
+        s = s.Replace("'", """")
+
+        ' Eliminar comas finales antes de } o ]
+        s = System.Text.RegularExpressions.Regex.Replace(s, ",\s*([\}\]])", "$1")
+
+        Return s
+    End Function
+
+    Public Function CrearApi(RequestURL As String, StrData As String) As String
+
+        Dim WebRequest As HttpWebRequest
+        Dim Reader As StreamReader
+        Dim Response As HttpWebResponse
+
+        Dim StrDataRes As String = ""
+        Dim ApiLoc As String
+        ' Inicializar contadores para evitar valores previos
+        TotalReg = 0
+        NumReg = 0
+        TextApi.Text = BaseDatos
+        TextApi.Refresh()
+        '
+        ' Preparar la petición para enviar datos como form URL encoded
+        '
+        Debug.Print(RequestURL)
+        ApiLoc = "Token:" & ApiVal
+        WebRequest = DirectCast(System.Net.WebRequest.Create(RequestURL), HttpWebRequest)
+        WebRequest.Method = CRUDMethod.Create
+        WebRequest.Headers.Add(ApiLoc)
+        ' Convertir StrData JSON a application/x-www-form-urlencoded si es necesario
+        Dim postData As String = ""
+        If Not String.IsNullOrWhiteSpace(StrData) Then
+            Dim parsedOk As Boolean = False
+            Dim normalized As String = NormalizeJsonString(StrData)
+
+            Try
+                ' Intentar parsear la cadena normalizada como JSON
+                Dim jo As JObject = JObject.Parse(normalized)
+                Dim parts As New System.Collections.Generic.List(Of String)
+                For Each prop As JProperty In jo.Properties()
+                    Dim name As String = prop.Name
+                    Dim valueToken As JToken = prop.Value
+                    Dim value As String
+
+                    ' Si el valor es un objeto o array, serializarlo; si es booleano o número, usar su representación
+                    Select Case valueToken.Type
+                        Case JTokenType.Boolean
+                            value = If(CBool(valueToken), "true", "false")
+                        Case JTokenType.Null
+                            value = ""
+                        Case JTokenType.String, JTokenType.Integer, JTokenType.Float
+                            value = valueToken.ToString()
+                        Case Else
+                            value = valueToken.ToString(Newtonsoft.Json.Formatting.None)
+                    End Select
+
+                    parts.Add(Uri.EscapeDataString(name) & "=" & Uri.EscapeDataString(value))
+                Next
+                postData = String.Join("&", parts)
+                parsedOk = True
+            Catch ex As Exception
+                ' No es JSON válido incluso tras normalizar: caeremos al fallback
+                Debug.Print("Normalizado no parseable: " & ex.Message)
+            End Try
+
+            If Not parsedOk Then
+                ' Fallback: usar la cadena original (o la normalizada) tal cual, para casos form-urlencoded
+                ' Preferimos la cadena normalizada para corregir True/False y comas finales si procede,
+                ' pero si la cadena parece claramente form-url-encoded la dejaremos como estaba.
+                If StrData.Contains("=") AndAlso Not normalized.Contains("{") Then
+                    postData = StrData
+                Else
+                    postData = normalized
+                End If
+            End If
+        End If
+
+        WebRequest.ContentType = "application/x-www-form-urlencoded"
+        Dim dataBytes() As Byte = System.Text.Encoding.UTF8.GetBytes(postData)
+        WebRequest.ContentLength = dataBytes.Length
+        Try
+            Using requestStream As System.IO.Stream = WebRequest.GetRequestStream()
+                requestStream.Write(dataBytes, 0, dataBytes.Length)
+                requestStream.Flush()
+            End Using
+            '
+            ' procesamos la perciobn WebRequest y recogemos la respuesta
+            '
+            Response = DirectCast(WebRequest.GetResponse(), HttpWebResponse)
+            Reader = New StreamReader(Response.GetResponseStream())
+            StrDataRes = Reader.ReadToEnd()
+            Reader.Close()
+        Catch ex As Exception
+            Traza.Text += "CrearAPI FacturaScript " & vbCrLf & RequestURL & vbCrLf & ex.ToString & vbCrLf
+            StrDataRes = ""
+        End Try
+
+        Debug.Print(StrDataRes)
+        CrearApi = StrDataRes
+
+    End Function
 
     Private Sub FrmMenu_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
@@ -280,5 +552,70 @@ Public Class FrmMenu
 
     End Sub
 
+    Private Sub BtnStock_Click(sender As Object, e As EventArgs) Handles BtnStock.Click
+        '
+        Dim NumRegVariante As Long
 
+        ApiVal = ClaveFs
+
+        ' Abrimos la Base de datos para cargar o mantener la tabla Stock
+        Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
+        Dim conn As New OleDb.OleDbConnection(connString)
+        conn.Open()
+
+        ' Borramos el stock actual con el Idweb
+        Dim deleteCmd As New OleDb.OleDbCommand("DELETE FROM Stock WHERE IdWeb = @IdWeb", conn)
+        deleteCmd.Parameters.AddWithValue("@IdWeb", WebId)
+        deleteCmd.ExecuteNonQuery()
+
+        ' Paginacion
+        Offset = 0
+
+        Do
+            ' BaseURL de la API de FacturaScripts
+            Dim BaseUrl As String = WebFs.TrimEnd("/"c) & "/api/3/variantes?offset=" & Offset
+
+            ' Obtenemos el stock de las variantes desde la API de FacturaScripts
+            Dim response As String = LeerApi(BaseUrl)
+            Traza.Text += "Lectura " & NumReg & " desde " & Offset & " de " & TotalReg & " disponibles" & vbCrLf
+            Traza.Refresh()
+
+            Offset += NumReg
+
+            ' Para cada variante obtenida la grabamos en la tabla Stock de la base de datos
+            If NumReg > 0 Then
+                Dim lecturaJson As JArray = JArray.Parse(response)
+                For Each variante As JObject In lecturaJson
+                    Dim idvariante As String = variante("idvariante").ToString()
+                    Dim idproducto As String = variante("idproducto").ToString()
+                    Dim referencia As String = variante("referencia").ToString()
+                    Dim stock As String = variante("stockfis").ToString()
+
+                    ' recogemos el la descripcion de produto de la tabla productos con la API de FacturaScripts para guardarla en
+                    ' la tabla Stock y tenerla disponible para futuras consultas sin necesidad de volver a llamar a la API de
+                    ' FacturaScripts.
+                    Dim BaseUrlProducto As String = WebFs.TrimEnd("/"c) & "/api/3/productos/" & idproducto
+                    NumRegVariante = NumReg
+                    Dim responseProducto As String = LeerApi(BaseUrlProducto)
+                    NumReg = NumRegVariante
+                    Dim lecturaJsonProducto As JObject = JObject.Parse(responseProducto)
+                    Dim descripcion As String = lecturaJsonProducto("descripcion").ToString()
+
+                    Dim insertCmd As New OleDb.OleDbCommand("INSERT INTO Stock (IdWeb, Variante, Stock, Producto, Referencia, Descripcion) VALUES (@IdWeb, @Idvariante, @Stock, @Producto, @Referencia, @Descripcion)", conn)
+                    insertCmd.Parameters.AddWithValue("@IdWeb", WebId)
+                    insertCmd.Parameters.AddWithValue("@Idvariante", idvariante)
+                    insertCmd.Parameters.AddWithValue("@Stock", stock)
+                    insertCmd.Parameters.AddWithValue("@Producto", idproducto)
+                    insertCmd.Parameters.AddWithValue("@Referencia", referencia)
+                    insertCmd.Parameters.AddWithValue("@Descripcion", descripcion)
+                    insertCmd.ExecuteNonQuery()
+                Next
+            End If
+
+        Loop Until NumReg = 0
+
+        ' Cerramos la conexión a la base de datos
+        conn.Close()
+
+    End Sub
 End Class

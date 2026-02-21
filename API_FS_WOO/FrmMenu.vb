@@ -556,6 +556,9 @@ Public Class FrmMenu
         '
         Dim NumRegVariante As Long
 
+        Traza.Text = "Descargando stock de FacturaScripts..." & vbCrLf
+        Traza.Refresh()
+
         ApiVal = ClaveFs
 
         ' Abrimos la Base de datos para cargar o mantener la tabla Stock
@@ -590,6 +593,8 @@ Public Class FrmMenu
                     Dim idproducto As String = variante("idproducto").ToString()
                     Dim referencia As String = variante("referencia").ToString()
                     Dim stock As String = variante("stockfis").ToString()
+                    Dim codbarras As String = variante("codbarras").ToString()
+                    Dim tipocodbarras As String = variante("tipocodbarras").ToString()
 
                     ' recogemos el la descripcion de produto de la tabla productos con la API de FacturaScripts para guardarla en
                     ' la tabla Stock y tenerla disponible para futuras consultas sin necesidad de volver a llamar a la API de
@@ -601,13 +606,36 @@ Public Class FrmMenu
                     Dim lecturaJsonProducto As JObject = JObject.Parse(responseProducto)
                     Dim descripcion As String = lecturaJsonProducto("descripcion").ToString()
 
-                    Dim insertCmd As New OleDb.OleDbCommand("INSERT INTO Stock (IdWeb, Variante, Stock, Producto, Referencia, Descripcion) VALUES (@IdWeb, @Idvariante, @Stock, @Producto, @Referencia, @Descripcion)", conn)
+                    ' recogemos los valores stockmin y stockmax de la tabla stocks de la API de FacturaScripts para guardarlos
+                    ' en la tabla Stock y tenerlos disponibles para futuras consultas sin necesidad de volver a llamar a la API de
+                    ' FacturaScripts.
+                    Dim BaseUrlStock As String = WebFs.TrimEnd("/"c) & "/api/3/stocks?referencia=" & referencia
+                    NumRegVariante = NumReg
+                    Dim responseStock As String = LeerApi(BaseUrlStock)
+                    NumReg = NumRegVariante
+                    Dim lecturaJsonStock As JArray = JArray.Parse(responseStock)
+                    Dim stockmin As String = ""
+                    Dim stockmax As String = ""
+                    If lecturaJsonStock.Count > 0 Then
+                        stockmin = lecturaJsonStock(0)("stockmin").ToString()
+                        stockmax = lecturaJsonStock(0)("stockmax").ToString()
+                    End If
+
+                    ' Insertamos el stock de la variante en la tabla Stock de la base de datos
+
+                    Dim insertCmd As New OleDb.OleDbCommand(
+                        "INSERT INTO Stock (IdWeb, Variante, Stock, Producto, Referencia, Descripcion, CodBarras, TipoCodBarras, StockMin, StockMax)" &
+                        "VALUES (@IdWeb, @Idvariante, @Stock, @Producto, @Referencia, @Descripcion, @codbarras, @tipocodbarras, @stockmin, @stockmax)", conn)
                     insertCmd.Parameters.AddWithValue("@IdWeb", WebId)
                     insertCmd.Parameters.AddWithValue("@Idvariante", idvariante)
                     insertCmd.Parameters.AddWithValue("@Stock", stock)
                     insertCmd.Parameters.AddWithValue("@Producto", idproducto)
                     insertCmd.Parameters.AddWithValue("@Referencia", referencia)
                     insertCmd.Parameters.AddWithValue("@Descripcion", descripcion)
+                    insertCmd.Parameters.AddWithValue("@codbarras", codbarras)
+                    insertCmd.Parameters.AddWithValue("@tipcodbarras", tipocodbarras)
+                    insertCmd.Parameters.AddWithValue("@stockmin", stockmin)
+                    insertCmd.Parameters.AddWithValue("@stockmax", stockmax)
                     insertCmd.ExecuteNonQuery()
                 Next
             End If
@@ -616,6 +644,9 @@ Public Class FrmMenu
 
         ' Cerramos la conexión a la base de datos
         conn.Close()
+
+        Traza.Text += "Stock descargado correctamente" & vbCrLf
+        Traza.Refresh()
 
     End Sub
 End Class

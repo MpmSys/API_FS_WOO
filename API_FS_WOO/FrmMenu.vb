@@ -421,7 +421,7 @@ Public Class FrmMenu
         End If
 
         If count > 0 Then
-            ' Actualizar pedido existente
+            ' Actualizar pedido existente (NO modificar Estado)
             Dim updateCmd As New OleDb.OleDbCommand("UPDATE Pedidos SET Status = @Status, Total = @Total, FechaCreacion = @FechaCreacion, " &
                                                      "MetodoPago = @MetodoPago, TituloMetodoPago = @TituloMetodoPago, FechaPago = @FechaPago, FechaCierre = @FechaCierre " &
                                                      "WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
@@ -436,9 +436,9 @@ Public Class FrmMenu
             updateCmd.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
             updateCmd.ExecuteNonQuery()
         Else
-            ' Insertar nuevo pedido
-            Dim insertCmd As New OleDb.OleDbCommand("INSERT INTO Pedidos (IdWeb, IdPedido, Status, Total, FechaCreacion, MetodoPago, TituloMetodoPago, FechaPago, FechaCierre) " &
-                                                     "VALUES (@IdWeb, @IdPedido, @Status, @Total, @FechaCreacion, @MetodoPago, @TituloMetodoPago, @FechaPago, @FechaCierre)", conn)
+            ' Insertar nuevo pedido con Estado = NULL explícitamente
+            Dim insertCmd As New OleDb.OleDbCommand("INSERT INTO Pedidos (IdWeb, IdPedido, Status, Total, FechaCreacion, MetodoPago, TituloMetodoPago, FechaPago, FechaCierre, Estado) " &
+                                                     "VALUES (@IdWeb, @IdPedido, @Status, @Total, @FechaCreacion, @MetodoPago, @TituloMetodoPago, @FechaPago, @FechaCierre, @Estado)", conn)
             insertCmd.Parameters.AddWithValue("@IdWeb", WebId)
             insertCmd.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
             insertCmd.Parameters.AddWithValue("@Status", status)
@@ -448,8 +448,28 @@ Public Class FrmMenu
             insertCmd.Parameters.AddWithValue("@TituloMetodoPago", tituloMetodoPago)
             insertCmd.Parameters.AddWithValue("@FechaPago", fechaPago)
             insertCmd.Parameters.AddWithValue("@FechaCierre", fechacierre)
+            insertCmd.Parameters.AddWithValue("@Estado", DBNull.Value)
             insertCmd.ExecuteNonQuery()
         End If
+
+        ' si status es "cancelled" y estado es NULL marcamos el pedido como "CANCELADO"
+        If status = "cancelled" Then
+            Dim cmdEstado As New OleDb.OleDbCommand("SELECT Estado FROM Pedidos WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
+            cmdEstado.Parameters.AddWithValue("@IdWeb", WebId)
+            cmdEstado.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
+            Dim estadoActual = cmdEstado.ExecuteScalar()
+
+            ' Verificar si Estado es NULL o vacío
+            If IsDBNull(estadoActual) OrElse String.IsNullOrEmpty(CStr(estadoActual)) Then
+                Dim updateCmd As New OleDb.OleDbCommand("UPDATE Pedidos SET Estado = 'ANULADO' WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
+                updateCmd.Parameters.AddWithValue("@IdWeb", WebId)
+                updateCmd.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
+                updateCmd.ExecuteNonQuery()
+            End If
+        End If
+
+
+
     End Function
 
     Private Async Sub BtnDescargar_Click(sender As Object, e As EventArgs) Handles BtnDescargar.Click
@@ -677,7 +697,12 @@ Public Class FrmMenu
         ' lo actualizamos consultando el estado del pedido
         ' en la API de WooCommerce.
         Dim cmd As New OleDb.OleDbCommand("SELECT Pedidos.IdPedido FROM Pedidos WHERE " &
-            "(((Pedidos.[Estado]) <> 'OLD' And (Pedidos.[Estado]) <> 'FACTURADO')) Or (((Pedidos.[Estado]) Is NULL)) " &
+            "(" &
+            "Pedidos.[Estado] <> 'OLD' " &
+            "And Pedidos.[Estado] <> 'FACTURADO' " &
+            "And Pedidos.[Estado] <> 'ANULADO' " &
+            ") " &
+            "Or Pedidos.[Estado] Is NULL " &
             "ORDER BY Pedidos.IdPedido;", conn)
         Dim reader As OleDb.OleDbDataReader = cmd.ExecuteReader()
         Dim pedidosActualizar As New List(Of String)()
@@ -726,8 +751,18 @@ Public Class FrmMenu
                         ProcesarPedido(pedido, conn)
                         LastPedido = idPedido
                     Else
-                        Dim bodyErr = resp.Content.ReadAsStringAsync().Result
-                        Traza.AppendText($"Error al actualizar pedido {idPedido}: {bodyErr}" & vbCrLf)
+                        If resp.StatusCode = HttpStatusCode.NotFound Then
+                            Traza.AppendText($"Pedido {idPedido} no encontrado en WooCommerce." & vbCrLf)
+                            ' Si el pedido no se encuentra, lo marcamos como "ANULADO" para no volver a consultarlo en futuras actualizaciones,
+                            ' ya que puede ser un pedido antiguo que ya no existe en WooCommerce o un pedido que se ha eliminado.
+                            Dim updateCmd As New OleDb.OleDbCommand("UPDATE Pedidos SET Estado = 'ANULADO' WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
+                            updateCmd.Parameters.AddWithValue("@IdWeb", WebId)
+                            updateCmd.Parameters.AddWithValue("@IdPedido", idPedido)
+                            updateCmd.ExecuteNonQuery()
+                        Else
+                            Dim bodyErr = resp.Content.ReadAsStringAsync().Result
+                            Traza.AppendText($"Error al actualizar pedido {idPedido}: {bodyErr}" & vbCrLf)
+                        End If
                         Traza.Refresh()
                     End If
                 Catch ex As Exception
@@ -742,7 +777,15 @@ Public Class FrmMenu
         If Not String.IsNullOrEmpty(LastPedido) Then
             Dim cmdUpdate As New OleDb.OleDbCommand("UPDATE PARAMETROS SET VALPAR = ? WHERE NOMPAR = 'LASTPEDIDO'", conn)
             cmdUpdate.Parameters.AddWithValue("?", LastPedido)
-            cmdUpdate.ExecuteNonQuery()
+            Dim rowsAffected As Integer = cmdUpdate.ExecuteNonQuery()
+
+            ' Si no se actualizó ningún registro, insertamos uno nuevo
+            If rowsAffected = 0 Then
+                Dim cmdInsert As New OleDb.OleDbCommand("INSERT INTO PARAMETROS (NOMPAR, VALPAR) VALUES (?, ?)", conn)
+                cmdInsert.Parameters.AddWithValue("?", "LASTPEDIDO")
+                cmdInsert.Parameters.AddWithValue("?", LastPedido)
+                cmdInsert.ExecuteNonQuery()
+            End If
         End If
 
         ' Cerramos la conexión a la base de datos

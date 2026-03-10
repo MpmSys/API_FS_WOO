@@ -379,7 +379,7 @@ Public Class FrmMenu
         End
     End Sub
 
-    Private Function ProcesarPedido(pedido As Object, conn As OleDb.OleDbConnection)
+    Private Sub ProcesarPedido(pedido As Object, conn As OleDb.OleDbConnection)
         ' Mostramos los valores de los campos principales del pedido
         ' Id - status - total - fecha de creación - metodo de pago - titulo de metodo de pago y fecha de pago
 
@@ -461,16 +461,16 @@ Public Class FrmMenu
 
             ' Verificar si Estado es NULL o vacío
             If IsDBNull(estadoActual) OrElse String.IsNullOrEmpty(CStr(estadoActual)) Then
-                Dim updateCmd As New OleDb.OleDbCommand("UPDATE Pedidos SET Estado = 'ANULADO' WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
+                Dim updateCmd As New OleDb.OleDbCommand("UPDATE Pedidos SET Estado = 'CANCELADO', Fecha = Now() " &
+                                                        "WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
                 updateCmd.Parameters.AddWithValue("@IdWeb", WebId)
                 updateCmd.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
+                Debug.Print(updateCmd.CommandText)
                 updateCmd.ExecuteNonQuery()
             End If
         End If
 
-
-
-    End Function
+    End Sub
 
     Private Async Sub BtnDescargar_Click(sender As Object, e As EventArgs) Handles BtnDescargar.Click
 
@@ -619,7 +619,7 @@ Public Class FrmMenu
                     Dim codbarras As String = variante("codbarras").ToString()
                     Dim tipocodbarras As String = variante("tipocodbarras").ToString()
 
-                    ' recogemos el la descripcion de produto de la tabla productos con la API de FacturaScripts para guardarla en
+                    ' recogemos el la descripcion de prodotto de la tabla productos con la API de FacturaScripts para guardarla en
                     ' la tabla Stock y tenerla disponible para futuras consultas sin necesidad de volver a llamar a la API de
                     ' FacturaScripts.
                     Dim BaseUrlProducto As String = WebFs.TrimEnd("/"c) & "/api/3/productos/" & idproducto
@@ -755,9 +755,11 @@ Public Class FrmMenu
                             Traza.AppendText($"Pedido {idPedido} no encontrado en WooCommerce." & vbCrLf)
                             ' Si el pedido no se encuentra, lo marcamos como "ANULADO" para no volver a consultarlo en futuras actualizaciones,
                             ' ya que puede ser un pedido antiguo que ya no existe en WooCommerce o un pedido que se ha eliminado.
-                            Dim updateCmd As New OleDb.OleDbCommand("UPDATE Pedidos SET Estado = 'ANULADO' WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
+                            Dim fechaActual As DateTime = DateTime.Now
+                            Dim updateCmd As New OleDb.OleDbCommand($"UPDATE Pedidos SET Estado = 'ANULADO', Fecha = #{fechaActual:MM/dd/yyyy HH:mm:ss}# WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
                             updateCmd.Parameters.AddWithValue("@IdWeb", WebId)
                             updateCmd.Parameters.AddWithValue("@IdPedido", idPedido)
+                            Debug.Print($"UPDATE Pedidos SET Estado = 'ANULADO', Fecha = #{fechaActual:MM/dd/yyyy HH:mm:ss}# WHERE IdWeb = '{WebId}' AND IdPedido = '{idPedido}'")
                             updateCmd.ExecuteNonQuery()
                         Else
                             Dim bodyErr = resp.Content.ReadAsStringAsync().Result

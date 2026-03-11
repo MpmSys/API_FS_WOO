@@ -3,6 +3,7 @@ Imports System.Linq
 Imports System.Net
 Imports System.Net.Http
 Imports System.Net.Http.Headers
+Imports System.Security.Policy
 Imports System.Text
 Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Linq
@@ -679,15 +680,78 @@ Public Class FrmMenu
 
     End Sub
 
-    Private Sub BtnActualizar_Click(sender As Object, e As EventArgs) Handles BtnActualizar.Click
+    Private Async Sub BtnActualizar_Click(sender As Object, e As EventArgs) Handles BtnActualizar.Click
 
         Dim LastPedido As String = ""
         Dim NumPedidos As Integer = 0
+        Dim MaxPedido As String = ""
 
         ' Abrimos la Base de datos para mantener la tabla Stock
         Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
         Dim conn As New OleDb.OleDbConnection(connString)
         conn.Open()
+
+        ' Configuración de la API de WooCommerce
+        Dim BaseUrl As String = WebWoo.TrimEnd("/"c) & "/wp-json/wc/v3/"
+        Dim ConsumerKey As String = ClaveWoo
+        Dim ConsumerSecret As String = PassWoo
+
+        ' Leemos en Woocommerce cual es el último pedido para tener un punto de fin en la actualización de pedidos.
+
+        Dim Url As String = "orders?consumer_key=" & ConsumerKey & "&consumer_secret=" & ConsumerSecret & "&per_page=1&page=1&orderby=id&order=desc"
+
+        Dim pedidos As New List(Of Object)()
+
+        ' Seguridad: TLS 1.2 (requerido por la mayoría de hosts)
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
+
+        ' Cliente HTTP con descompresión automática
+        Dim handler As New HttpClientHandler() With {
+            .AutomaticDecompression = DecompressionMethods.GZip Or DecompressionMethods.Deflate
+        }
+
+
+        Using client As New HttpClient(handler)
+            client.Timeout = TimeSpan.FromSeconds(60)
+            client.BaseAddress = New Uri(BaseUrl)
+
+            ' Encabezados comunes
+            client.DefaultRequestHeaders.Accept.Clear()
+            client.DefaultRequestHeaders.Accept.Add(New MediaTypeWithQualityHeaderValue("application/json"))
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+
+            Traza.AppendText("Buscando ultimo pedido..." & vbCrLf)
+            Traza.Refresh()
+
+            Try
+                ' ✅ Credenciales como parámetros de URL (como funciona en el navegador)
+                Dim resp As HttpResponseMessage = Await client.GetAsync(Url).ConfigureAwait(True)
+
+                Traza.AppendText($"Status Code: {CInt(resp.StatusCode)} {resp.StatusCode}" & vbCrLf)
+                Traza.Refresh()
+
+                If Not resp.IsSuccessStatusCode Then
+                    Dim bodyErr = Await resp.Content.ReadAsStringAsync().ConfigureAwait(True)
+                    Traza.AppendText($"Error: {bodyErr}" & vbCrLf)
+                    Traza.Refresh()
+                    Exit Try
+                End If
+
+                Dim json As String = Await resp.Content.ReadAsStringAsync().ConfigureAwait(True)
+                Dim pageOrders As List(Of Object) = JsonConvert.DeserializeObject(Of List(Of Object))(json)
+
+                pedidos.AddRange(pageOrders)
+
+            Catch ex As TaskCanceledException
+                Traza.AppendText($"Timeout: {ex.Message}" & vbCrLf)
+                MsgBox("Se agotó el tiempo de espera al conectar con la API.", vbExclamation, "Timeout")
+            Catch ex As Exception
+                Traza.AppendText($"Excepción: {ex.Message}" & vbCrLf & ex.StackTrace & vbCrLf)
+                MsgBox($"Error de conexión: {ex.Message}", vbCritical, "Error")
+            End Try
+        End Using
+
+        MaxPedido = pedidos.Select(Function(p) p("id").ToString()).FirstOrDefault()
 
         ' si existe el paramero LASTPEDIDO en la tabla PARAMETROS , lo leemos para usarlo como punto de partida
         ' en la actualización de pedidos. De esta forma, evitamos consultar el estado de todos los pedidos cada
@@ -726,22 +790,29 @@ Public Class FrmMenu
         Traza.AppendText($"Total pedidos a actualizar: {pedidosActualizar.Count}" & vbCrLf)
         OldTraza = Traza.Text
 
+        ' añadimos los nuevos
+        Dim NuevosPedidos As Long = 0
+
+        For NuevosPedidos = LastPedido + 1 To MaxPedido
+            pedidosActualizar.Add(NuevosPedidos.ToString())
+        Next
+
+        Traza.Text = OldTraza
+        Traza.AppendText($"Total pedidos a actualizar + nuevos: {pedidosActualizar.Count}" & vbCrLf)
+        OldTraza = Traza.Text
+
         For Each idPedido As String In pedidosActualizar
 
-            ' Configuración de la API de WooCommerce
-            Dim BaseUrl As String = WebWoo.TrimEnd("/"c) & "/wp-json/wc/v3/"
-            Dim ConsumerKey As String
-            Dim ConsumerSecret As String
             ConsumerKey = ClaveWoo
             ConsumerSecret = PassWoo
             ' Seguridad: TLS 1.2 (requerido por la mayoría de hosts)
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
             ' Cliente HTTP con descompresión automática
-            Dim handler As New HttpClientHandler() With {
+            Dim handlernew As New HttpClientHandler() With {
                 .AutomaticDecompression = DecompressionMethods.GZip Or DecompressionMethods.Deflate
             }
 
-            Using client As New HttpClient(handler)
+            Using client As New HttpClient(handlernew)
                 client.Timeout = TimeSpan.FromSeconds(60)
                 client.BaseAddress = New Uri(BaseUrl)
                 ' Encabezados comunes
@@ -750,11 +821,11 @@ Public Class FrmMenu
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                 Try
                     ' ✅ Credenciales como parámetros de URL (como funciona en el navegador)
-                    Dim url = $"orders/{idPedido}?consumer_key={ConsumerKey}&consumer_secret={ConsumerSecret}"
+                    Url = $"orders/{idPedido}?consumer_key={ConsumerKey}&consumer_secret={ConsumerSecret}"
                     Traza.Text = OldTraza
                     Traza.AppendText($"Solicitando actualización del pedido {idPedido}..." & NumPedidos + 1 & vbCrLf)
                     Traza.Refresh()
-                    Dim resp As HttpResponseMessage = client.GetAsync(url).Result
+                    Dim resp As HttpResponseMessage = client.GetAsync(Url).Result
                     NumPedidos += 1
                     Traza.AppendText($"Status Code: {CInt(resp.StatusCode)} {resp.StatusCode} " & NumPedidos & " ")
                     Traza.Refresh()
@@ -794,6 +865,7 @@ Public Class FrmMenu
             End Using
 
         Next
+
 
         ' Grabamos el último pedido actualizado en la tabla PARAMETROS para usarlo como punto de partida en la próxima actualización
         If Not String.IsNullOrEmpty(LastPedido) Then

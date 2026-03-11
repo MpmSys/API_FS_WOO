@@ -35,6 +35,8 @@ Public Class FrmMenu
     Dim ApiVal As String
     Dim Offset As Long
 
+    Dim OldTraza As String
+
     Public Class CRUDMethod
         Public Shared Create As String = "POST"
         Public Shared Read As String = "GET"
@@ -467,6 +469,10 @@ Public Class FrmMenu
                 updateCmd.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
                 Debug.Print(updateCmd.CommandText)
                 updateCmd.ExecuteNonQuery()
+                Traza.Text = OldTraza
+                Traza.AppendText($"Pedido {pedido("id").ToString()} marcado como CANCELADO." & vbCrLf)
+                OldTraza = Traza.Text
+                Traza.Refresh()
             End If
         End If
 
@@ -707,12 +713,18 @@ Public Class FrmMenu
         Dim reader As OleDb.OleDbDataReader = cmd.ExecuteReader()
         Dim pedidosActualizar As New List(Of String)()
         Debug.Print(cmd.CommandText)
+        OldTraza = Traza.Text
         While reader.Read()
+            Traza.Text = OldTraza
             Traza.AppendText($"Pedido a actualizar: {reader("IdPedido").ToString()}" & vbCrLf)
             pedidosActualizar.Add(reader("IdPedido").ToString())
             LastPedido = reader("IdPedido").ToString()
         End While
         reader.Close()
+
+        Traza.Text = OldTraza
+        Traza.AppendText($"Total pedidos a actualizar: {pedidosActualizar.Count}" & vbCrLf)
+        OldTraza = Traza.Text
 
         For Each idPedido As String In pedidosActualizar
 
@@ -739,7 +751,8 @@ Public Class FrmMenu
                 Try
                     ' ✅ Credenciales como parámetros de URL (como funciona en el navegador)
                     Dim url = $"orders/{idPedido}?consumer_key={ConsumerKey}&consumer_secret={ConsumerSecret}"
-                    Traza.AppendText($"Solicitando actualización del pedido {idPedido}..." & vbCrLf)
+                    Traza.Text = OldTraza
+                    Traza.AppendText($"Solicitando actualización del pedido {idPedido}..." & NumPedidos + 1 & vbCrLf)
                     Traza.Refresh()
                     Dim resp As HttpResponseMessage = client.GetAsync(url).Result
                     NumPedidos += 1
@@ -761,14 +774,21 @@ Public Class FrmMenu
                             updateCmd.Parameters.AddWithValue("@IdPedido", idPedido)
                             Debug.Print($"UPDATE Pedidos SET Estado = 'ANULADO', Fecha = #{fechaActual:MM/dd/yyyy HH:mm:ss}# WHERE IdWeb = '{WebId}' AND IdPedido = '{idPedido}'")
                             updateCmd.ExecuteNonQuery()
+                            Traza.Text = OldTraza
+                            Traza.AppendText($"Pedido {idPedido} marcado como ANULADO." & vbCrLf)
+                            OldTraza = Traza.Text
                         Else
                             Dim bodyErr = resp.Content.ReadAsStringAsync().Result
+                            Traza.Text = OldTraza
                             Traza.AppendText($"Error al actualizar pedido {idPedido}: {bodyErr}" & vbCrLf)
+                            OldTraza = Traza.Text
                         End If
                         Traza.Refresh()
                     End If
                 Catch ex As Exception
+                    Traza.Text = OldTraza
                     Traza.AppendText($"Excepción al actualizar pedido {idPedido}: {ex.Message}" & vbCrLf & ex.StackTrace & vbCrLf)
+                    OldTraza = Traza.Text
                     Traza.Refresh()
                 End Try
             End Using
@@ -793,7 +813,8 @@ Public Class FrmMenu
         ' Cerramos la conexión a la base de datos
         conn.Close()
 
-        Traza.Text += "Stock descargado correctamente" & vbCrLf
+        Traza.Text = OldTraza
+        Traza.Text += "Pedidos actualizados correctamente" & vbCrLf
         Traza.Refresh()
 
     End Sub

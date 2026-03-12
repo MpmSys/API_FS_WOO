@@ -153,6 +153,14 @@
         gcypXlKWfjmhnW/AAAAAAElFTkSuQmCC
 </value>
   </data>
+  <data name="BtnFacturar.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAO
+        vAAADrwBlbxySQAAAG5JREFUOE+lklEKwDAIQ3t0j9abbXQQcDGK0kA+RH2R0rW0nqalvqYSemYmAUyX
+        PsspYO9dugXgRHgEUMljACePAVcXKI8AGPLD3EsB7A4gnOut3oDTQyp8evjCqHn5B/CpRR0Ukv1ClQz5
+        gcypXlKWfjmhnW/AAAAAAElFTkSuQmCC
+</value>
+  </data>
   <metadata name="$this.TrayHeight" type="System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
     <value>38</value>
   </metadata>

@@ -456,7 +456,7 @@ Public Class FrmMenu
         End If
 
         ' si status es "cancelled" y estado es NULL marcamos el pedido como "CANCELADO"
-        If status = "cancelled" Then
+        If status = "cancelled" Or status = "trash" Then
             Dim cmdEstado As New OleDb.OleDbCommand("SELECT Estado FROM Pedidos WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
             cmdEstado.Parameters.AddWithValue("@IdWeb", WebId)
             cmdEstado.Parameters.AddWithValue("@IdPedido", pedido("id").ToString())
@@ -890,4 +890,121 @@ Public Class FrmMenu
         Traza.Refresh()
 
     End Sub
+
+    Private Sub BtnFacturar_Click(sender As Object, e As EventArgs) Handles BtnFacturar.Click
+
+        Dim Facturar As Boolean = False
+
+
+        ' Abrimos la Base de datos para seleccionar los pedidos que se van a facturar
+        Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
+        Dim conn As New OleDb.OleDbConnection(connString)
+        conn.Open()
+
+        Traza.Text = ""
+        Traza.AppendText("Facturando pedidos..." & vbCrLf)
+        Traza.Refresh()
+
+        ' Seleccionamos los pedidos con estado nulo o vacio para facturar ordenados por idpedido
+        Dim cmd As New OleDb.OleDbCommand("SELECT IdPedido FROM Pedidos WHERE (Estado Is Null Or Estado = '') AND IdWeb = @IdWeb ORDER BY IdPedido", conn)
+        cmd.Parameters.AddWithValue("@IdWeb", WebId)
+
+        Dim pedidosAFacturar As New List(Of String)()
+
+        Using reader As OleDb.OleDbDataReader = cmd.ExecuteReader()
+            While reader.Read()
+                pedidosAFacturar.Add(reader("IdPedido").ToString())
+            End While
+        End Using
+
+        ' para cada pedido a facturar leemos el pedido de WooCommerce
+        For Each idPedido As String In pedidosAFacturar
+            'Traza.AppendText($"Facturando pedido {idPedido}..." & vbCrLf)
+            'Traza.Refresh()
+
+            Dim pedido As Object = Nothing
+            pedido = LeerPedidoWoo(idPedido)
+
+            Debug.Print($"Pedido leído para facturar: ID {pedido("id").ToString()}, Status {pedido("status").ToString()}")
+            Debug.Print($"Pedido completo: {JsonConvert.SerializeObject(pedido)}")
+
+            Debug.Print("")
+
+            Facturar = True
+            If pedido("status").ToString() = "auto-draft" Then Facturar = False
+            If pedido("status").ToString() = "checkout-draft" Then Facturar = False
+            If pedido("status").ToString() = "pending" Then Facturar = False
+            If pedido("status").ToString() = "esperando-tu-pago" Then Facturar = False
+
+            If Not facturar Then
+                Traza.AppendText($"Pedido {idPedido} está en estado {pedido("status").ToString()}, no se puede facturar." & vbCrLf)
+                Traza.Refresh()
+                Continue For
+            End If
+
+            Traza.AppendText($"Pedido {idPedido} facturable.")
+            Traza.AppendText(pedido("billing")("email") & vbCrLf)
+            'Traza.AppendText(pedido("billing")("first_name") & " " & pedido("billing")("last_name") & vbCrLf)
+
+
+
+        Next
+
+
+
+
+
+
+
+        ' cierre de la conexión a la base de datos
+        conn.Close()
+
+        Traza.Text += "Pedidos facturados correctamente" & vbCrLf
+        Traza.Refresh()
+
+    End Sub
+
+    Public Function LeerPedidoWoo(idPedido As String) As Object
+        Dim pedido As Object = Nothing
+        ' Configuración de la API de WooCommerce
+        Dim BaseUrl As String = WebWoo.TrimEnd("/"c) & "/wp-json/wc/v3/"
+        Dim ConsumerKey As String = ClaveWoo
+        Dim ConsumerSecret As String = PassWoo
+        ' Seguridad: TLS 1.2 (requerido por la mayoría de hosts)
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
+        ' Cliente HTTP con descompresión automática
+        Dim handler As New HttpClientHandler() With {
+            .AutomaticDecompression = DecompressionMethods.GZip Or DecompressionMethods.Deflate
+        }
+        Using client As New HttpClient(handler)
+            client.Timeout = TimeSpan.FromSeconds(60)
+            client.BaseAddress = New Uri(BaseUrl)
+            ' Encabezados comunes
+            client.DefaultRequestHeaders.Accept.Clear()
+            client.DefaultRequestHeaders.Accept.Add(New MediaTypeWithQualityHeaderValue("application/json"))
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            Try
+                ' ✅ Credenciales como parámetros de URL (como funciona en el navegador)
+                Dim url = $"orders/{idPedido}?consumer_key={ConsumerKey}&consumer_secret={ConsumerSecret}"
+                'Traza.AppendText($"Solicitando pedido {idPedido} para facturar..." & vbCrLf)
+                'Traza.Refresh()
+                Dim resp As HttpResponseMessage = client.GetAsync(url).Result
+                'Traza.AppendText($"Status Code: {CInt(resp.StatusCode)} {resp.StatusCode}" & vbCrLf)
+                'Traza.Refresh()
+                If resp.IsSuccessStatusCode Then
+                    Dim json As String = resp.Content.ReadAsStringAsync().Result
+                    pedido = JsonConvert.DeserializeObject(Of Object)(json)
+                Else
+                    Dim bodyErr = resp.Content.ReadAsStringAsync().Result
+                    Traza.AppendText($"Error al leer pedido {idPedido} para facturar: {bodyErr}" & vbCrLf)
+                    Traza.Refresh()
+                End If
+            Catch ex As Exception
+                Traza.AppendText($"Excepción al leer pedido {idPedido} para facturar: {ex.Message}" & vbCrLf & ex.StackTrace & vbCrLf)
+                Traza.Refresh()
+            End Try
+        End Using
+        Return pedido
+    End Function
+
 End Class

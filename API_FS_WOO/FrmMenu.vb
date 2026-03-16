@@ -74,6 +74,10 @@ Public Class FrmMenu
         WebRequest.Method = CRUDMethod.Read
         WebRequest.Headers.Add(ApiLoc)
 
+        'Traza.Text += "Leyendo API " & RequestURL & vbCrLf
+        'Traza.Text += "Token utilizado: " & ApiLoc & vbCrLf
+        'Traza.Refresh()
+
         Try
             '
             ' Realizamos la petición y devolvemos los siguientes datos
@@ -210,98 +214,94 @@ Public Class FrmMenu
         Return s
     End Function
 
-    Public Function CrearApi(RequestURL As String, StrData As String) As String
-
+    Public Function CrearApi(RequestURL As String, StrData As String, Optional ApiOrigen As String = "") As String
         Dim WebRequest As HttpWebRequest
         Dim Reader As StreamReader
         Dim Response As HttpWebResponse
-
         Dim StrDataRes As String = ""
         Dim ApiLoc As String
-        ' Inicializar contadores para evitar valores previos
+
         TotalReg = 0
         NumReg = 0
         TextApi.Text = BaseDatos
         TextApi.Refresh()
-        '
-        ' Preparar la petición para enviar datos como form URL encoded
-        '
+
         Debug.Print(RequestURL)
+
         ApiLoc = "Token:" & ApiVal
+        If ApiOrigen <> "" Then
+            ApiLoc = "Token:" & ApiOrigen
+        End If
+
         WebRequest = DirectCast(System.Net.WebRequest.Create(RequestURL), HttpWebRequest)
         WebRequest.Method = CRUDMethod.Create
         WebRequest.Headers.Add(ApiLoc)
-        ' Convertir StrData JSON a application/x-www-form-urlencoded si es necesario
+
+        ' Convertir JSON a form-url-encoded
         Dim postData As String = ""
         If Not String.IsNullOrWhiteSpace(StrData) Then
-            Dim parsedOk As Boolean = False
-            Dim normalized As String = NormalizeJsonString(StrData)
-
             Try
-                ' Intentar parsear la cadena normalizada como JSON
-                Dim jo As JObject = JObject.Parse(normalized)
+                Dim jo As JObject = JObject.Parse(StrData)
                 Dim parts As New System.Collections.Generic.List(Of String)
                 For Each prop As JProperty In jo.Properties()
                     Dim name As String = prop.Name
-                    Dim valueToken As JToken = prop.Value
-                    Dim value As String
-
-                    ' Si el valor es un objeto o array, serializarlo; si es booleano o número, usar su representación
-                    Select Case valueToken.Type
-                        Case JTokenType.Boolean
-                            value = If(CBool(valueToken), "true", "false")
-                        Case JTokenType.Null
-                            value = ""
-                        Case JTokenType.String, JTokenType.Integer, JTokenType.Float
-                            value = valueToken.ToString()
-                        Case Else
-                            value = valueToken.ToString(Newtonsoft.Json.Formatting.None)
-                    End Select
-
+                    Dim value As String = If(prop.Value Is Nothing, "", prop.Value.ToString())
                     parts.Add(Uri.EscapeDataString(name) & "=" & Uri.EscapeDataString(value))
                 Next
                 postData = String.Join("&", parts)
-                parsedOk = True
             Catch ex As Exception
-                ' No es JSON válido incluso tras normalizar: caeremos al fallback
-                Debug.Print("Normalizado no parseable: " & ex.Message)
+                postData = StrData
             End Try
-
-            If Not parsedOk Then
-                ' Fallback: usar la cadena original (o la normalizada) tal cual, para casos form-urlencoded
-                ' Preferimos la cadena normalizada para corregir True/False y comas finales si procede,
-                ' pero si la cadena parece claramente form-url-encoded la dejaremos como estaba.
-                If StrData.Contains("=") AndAlso Not normalized.Contains("{") Then
-                    postData = StrData
-                Else
-                    postData = normalized
-                End If
-            End If
         End If
 
-        WebRequest.ContentType = "application/x-www-form-urlencoded"
+        ' ✅ Logging para debug
+        Debug.Print("POST Data: " & postData)
+        Debug.Print("Token: " & ApiLoc)
+
+        WebRequest.ContentType = "application/x-www-form-urlencoded; charset=utf-8"
         Dim dataBytes() As Byte = System.Text.Encoding.UTF8.GetBytes(postData)
         WebRequest.ContentLength = dataBytes.Length
+
         Try
             Using requestStream As System.IO.Stream = WebRequest.GetRequestStream()
                 requestStream.Write(dataBytes, 0, dataBytes.Length)
                 requestStream.Flush()
             End Using
-            '
-            ' procesamos la perciobn WebRequest y recogemos la respuesta
-            '
+
             Response = DirectCast(WebRequest.GetResponse(), HttpWebResponse)
             Reader = New StreamReader(Response.GetResponseStream())
             StrDataRes = Reader.ReadToEnd()
             Reader.Close()
+
+        Catch ex As WebException
+            ' ✅ Capturar detalles completos del error 400
+            If ex.Response IsNot Nothing Then
+                Using errResponse As HttpWebResponse = DirectCast(ex.Response, HttpWebResponse)
+                    Using errReader As New StreamReader(errResponse.GetResponseStream())
+                        Dim errorBody As String = errReader.ReadToEnd()
+
+                        Traza.Text += "━━━ ERROR CrearApi ━━━" & vbCrLf
+                        Traza.Text += "URL: " & RequestURL & vbCrLf
+                        Traza.Text += "Status: " & errResponse.StatusCode.ToString() & vbCrLf
+                        Traza.Text += "Datos enviados: " & postData & vbCrLf
+                        Traza.Text += "Respuesta del servidor: " & errorBody & vbCrLf
+                        Traza.Text += "━━━━━━━━━━━━━━━━━━━━━━" & vbCrLf
+
+                        Debug.Print("Error Response: " & errorBody)
+                    End Using
+                End Using
+            Else
+                Traza.Text += "CrearApi Error (sin respuesta): " & ex.Message & vbCrLf
+            End If
+            StrDataRes = ""
+
         Catch ex As Exception
-            Traza.Text += "CrearAPI FacturaScript " & vbCrLf & RequestURL & vbCrLf & ex.ToString & vbCrLf
+            Traza.Text += "CrearApi Excepción: " & ex.ToString & vbCrLf
             StrDataRes = ""
         End Try
 
         Debug.Print(StrDataRes)
-        CrearApi = StrDataRes
-
+        Return StrDataRes
     End Function
 
     Private Sub FrmMenu_Load(sender As Object, e As EventArgs) Handles MyBase.Load
@@ -895,11 +895,35 @@ Public Class FrmMenu
 
         Dim Facturar As Boolean = False
 
+        Dim URL As String = WebFs
+        Dim API As String = ClaveFs
+
+        Dim Busqueda As String = ""
+        Dim Cliente As String = ""
+
+        Dim OldPais As String = ""
+        Dim IdPais As String = ""
+
+        Dim EmailCliente As String = ""
 
         ' Abrimos la Base de datos para seleccionar los pedidos que se van a facturar
         Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
         Dim conn As New OleDb.OleDbConnection(connString)
         conn.Open()
+
+        ' leemos los parametros TESTURL y TESTAPI de la tabla PARAMETROS para saber si estamos en modo test o no.
+        ' En modo test, se facturan los pedidos en el entorno de pruebas de FacturaScripts, y en modo normal se facturan en el entorno de producción de FacturaScripts.
+        Dim cmdTestUrl As New OleDb.OleDbCommand("SELECT VALPAR FROM PARAMETROS WHERE NOMPAR = 'TESTURL'", conn)
+        If cmdTestUrl.ExecuteScalar() IsNot Nothing Then
+            Dim testUrl As String = cmdTestUrl.ExecuteScalar().ToString()
+            URL = testUrl
+        End If
+
+        Dim cmdTestApi As New OleDb.OleDbCommand("SELECT VALPAR FROM PARAMETROS WHERE NOMPAR = 'TESTAPI'", conn)
+        If cmdTestApi.ExecuteScalar() IsNot Nothing Then
+            Dim testApi As String = cmdTestApi.ExecuteScalar().ToString()
+            API = testApi
+        End If
 
         Traza.Text = ""
         Traza.AppendText("Facturando pedidos..." & vbCrLf)
@@ -946,11 +970,106 @@ Public Class FrmMenu
             Traza.AppendText(pedido("billing")("email") & vbCrLf)
             'Traza.AppendText(pedido("billing")("first_name") & " " & pedido("billing")("last_name") & vbCrLf)
 
+            ' Construir la URL con el email correctamente codificado
+            EmailCliente = pedido("billing")("email").ToString()
+            Busqueda = URL.TrimEnd("/"c) & "/api/3/clientes?filter[email]=" & Uri.EscapeDataString(EmailCliente)
 
+            Traza.AppendText("Buscando cliente en FacturaScripts con email: " & emailCliente & vbCrLf & Busqueda & vbCrLf)
+            Traza.Refresh()
+
+            Cliente = LeerApi(Busqueda, API)
+
+            Traza.AppendText(Busqueda & vbCrLf)
+            Traza.AppendText(Cliente & vbCrLf)
+            Traza.Refresh()
+
+            Dim CodCliente As String = ""
+
+            If Cliente = "[]" Then
+
+                Debug.Print($"Cliente con email {pedido("billing")("email").ToString()} no encontrado en FacturaScripts, se creará un nuevo cliente al facturar el pedido.")
+
+                Dim NombreCliente As String = pedido("billing")("first_name").ToString() & " " & pedido("billing")("last_name").ToString()
+                EmailCliente = pedido("billing")("email").ToString()
+                Dim TelefonoCliente As String = pedido("billing")("phone").ToString()
+                ' si company no esta en blanco RazonSocialCliente es company, si no, es el nombre del cliente
+                Dim RazonSocialCliente As String = If(String.IsNullOrEmpty(pedido("billing")("company").ToString()), pedido("billing")("last_name").ToString() & " " & pedido("billing")("first_name").ToString(), pedido("billing")("company").ToString())
+                Dim Pais As String = pedido("billing")("country").ToString()
+
+                If OldPais <> Pais Then
+                    OldPais = Pais
+
+                    ' Buscamos Pais en la tabla de FacturaScripts.
+                    ' Para esto, usamos el campo Pais del pedido que contiene el codigo de pais en formato ISO2 (por ejemplo, ES para España,
+                    ' MX para México, etc.) y lo comparamos con el campo CodPaisISO2 de la tabla Paises.
+                    ' Si encontramos una coincidencia, usamos el campo CodPais de la tabla Paises como codigo de pais
+                    ' para crear el cliente en FacturaScripts. Si no encontramos una coincidencia, dejamos el codigo de pais con el valor actual.
+                    Dim BusquedaPais = URL.TrimEnd("/"c) & "/api/3/pais?filter[codiso]=" & Pais
+                    Dim PaisJson As String = LeerApi(BusquedaPais, API)
+
+                    If PaisJson <> "" Then
+                        Dim Paises As JArray = JArray.Parse(PaisJson)
+                        If Paises.Count > 0 Then
+                            Pais = Paises(0)("codpais").ToString()
+                            Traza.AppendText($"Pais encontrado en FacturaScripts: {Pais}" & vbCrLf)
+                            IdPais = Pais
+                        Else
+                            Traza.AppendText($"Pais con codigo ISO2 {Pais} no encontrado en FacturaScripts, se usará el codigo de pais del pedido." & vbCrLf)
+                        End If
+                    Else
+                        Traza.AppendText($"Error al buscar pais con codigo ISO2 {Pais} en FacturaScripts, se usará el codigo de pais del pedido." & vbCrLf)
+                    End If
+                Else
+                    Pais = IdPais
+                End If
+
+                ' Creamos con los datos del pedido. Para esto, usamos el endpoint de creación de clientes de la API de FacturaScripts.
+                ' con la rutina CrearApi, que recibe como parámetros la URL del endpoint de creación de clientes,
+                ' el API key de FacturaScripts y el JSON con los datos del cliente a crear.
+                Dim ClienteJson As String = JsonConvert.SerializeObject(New With {
+                    .cifnif = "",
+                    .nombre = NombreCliente,
+                    .email = EmailCliente,
+                    .telefono = TelefonoCliente,
+                    .razonsocial = RazonSocialCliente,
+                    .pais = Pais
+                })
+                Dim BusquedaCrearCliente = URL.TrimEnd("/"c) & "/api/3/clientes"
+                Traza.AppendText($"Creando cliente en FacturaScripts con los siguientes datos: {ClienteJson}" & vbCrLf)
+                Traza.Refresh()
+                Dim Resultado = CrearApi(BusquedaCrearCliente, ClienteJson, API)
+
+                ' Extraer CodCliente del resultado de la creación
+                If Not String.IsNullOrEmpty(Resultado) Then
+                    Try
+                        Dim ClienteCreado As JObject = JObject.Parse(Resultado)
+                        CodCliente = ClienteCreado("data")("codcliente").ToString()
+                        Traza.AppendText($"Cliente creado exitosamente con código: {CodCliente}" & vbCrLf)
+                        Debug.Print($"Cliente creado en FacturaScripts: CodCliente {CodCliente}")
+                    Catch ex As Exception
+                        Traza.AppendText($"Error al parsear respuesta de creación de cliente: {ex.Message}" & vbCrLf)
+                        Debug.Print($"Error al crear cliente en FacturaScripts: {Resultado}")
+                    End Try
+                Else
+                    Traza.AppendText($"Error: No se recibió respuesta al crear el cliente" & vbCrLf)
+                End If
+
+            Else
+                Dim Clientes As JArray = JArray.Parse(Cliente)
+                If Clientes.Count > 0 Then
+                    CodCliente = Clientes(0)("codcliente").ToString()
+                    Debug.Print($"Cliente encontrado en FacturaScripts: CodCliente {CodCliente}")
+                Else
+                    Debug.Print($"Error al parsear cliente encontrado en FacturaScripts: {Cliente}")
+                End If
+            End If
+
+            Traza.AppendText($"Cliente para pedido {idPedido}: {CodCliente} ({EmailCliente})" & vbCrLf)
+            Traza.Refresh()
+            Debug.Print(CodCliente & " " & "Cliente")
+            Debug.Print("")
 
         Next
-
-
 
 
 

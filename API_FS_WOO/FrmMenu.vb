@@ -905,6 +905,11 @@ Public Class FrmMenu
         Dim IdPais As String = ""
 
         Dim EmailCliente As String = ""
+        Dim NombreCliente As String = ""
+        Dim RazonSocialCliente As String = ""
+        Dim TelefonoCliente As String = ""
+        Dim Pais As String = ""
+        Dim CifDniCliente As String = ""
 
         ' Abrimos la Base de datos para seleccionar los pedidos que se van a facturar
         Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
@@ -989,12 +994,23 @@ Public Class FrmMenu
 
                 Debug.Print($"Cliente con email {pedido("billing")("email").ToString()} no encontrado en FacturaScripts, se creará un nuevo cliente al facturar el pedido.")
 
-                Dim NombreCliente As String = pedido("billing")("first_name").ToString() & " " & pedido("billing")("last_name").ToString()
+                NombreCliente = pedido("billing")("first_name").ToString() & " " & pedido("billing")("last_name").ToString()
                 EmailCliente = pedido("billing")("email").ToString()
-                Dim TelefonoCliente As String = pedido("billing")("phone").ToString()
+                TelefonoCliente = pedido("billing")("phone").ToString()
                 ' si company no esta en blanco RazonSocialCliente es company, si no, es el nombre del cliente
-                Dim RazonSocialCliente As String = If(String.IsNullOrEmpty(pedido("billing")("company").ToString()), pedido("billing")("last_name").ToString() & " " & pedido("billing")("first_name").ToString(), pedido("billing")("company").ToString())
-                Dim Pais As String = pedido("billing")("country").ToString()
+                RazonSocialCliente = If(String.IsNullOrEmpty(pedido("billing")("company").ToString()), pedido("billing")("last_name").ToString() & " " & pedido("billing")("first_name").ToString(), pedido("billing")("company").ToString())
+                Pais = pedido("billing")("country").ToString()
+
+                ' Extraer _billing_nif de meta_data
+                Dim metaData As JArray = pedido("meta_data")
+                CifDniCliente = ""
+
+                For Each meta As JObject In metaData
+                    If meta("key").ToString() = "_billing_nif" Then
+                        CifDniCliente = meta("value").ToString()
+                        Exit For
+                    End If
+                Next
 
                 If OldPais <> Pais Then
                     OldPais = Pais
@@ -1027,10 +1043,10 @@ Public Class FrmMenu
                 ' con la rutina CrearApi, que recibe como parámetros la URL del endpoint de creación de clientes,
                 ' el API key de FacturaScripts y el JSON con los datos del cliente a crear.
                 Dim ClienteJson As String = JsonConvert.SerializeObject(New With {
-                    .cifnif = "",
+                    .cifnif = CifDniCliente,
                     .nombre = NombreCliente,
                     .email = EmailCliente,
-                    .telefono = TelefonoCliente,
+                    .telefono1 = TelefonoCliente,
                     .razonsocial = RazonSocialCliente,
                     .pais = Pais
                 })
@@ -1058,6 +1074,44 @@ Public Class FrmMenu
                 Dim Clientes As JArray = JArray.Parse(Cliente)
                 If Clientes.Count > 0 Then
                     CodCliente = Clientes(0)("codcliente").ToString()
+                    NombreCliente = Clientes(0)("nombre").ToString()
+                    RazonSocialCliente = Clientes(0)("razonsocial").ToString()
+
+                    ' leemos con la API de FacturaScripts el codigo de pais del cliente con la tabla contactos
+                    ' idcontactofact de clientes -> idcontacto de contactos
+
+                    Dim DirContacto As String = URL.TrimEnd("/"c) & "/api/3/contactos/" & Clientes(0)("idcontactofact").ToString
+                    Dim ContactoJson As String = LeerApi(DirContacto, API)
+                    Dim Contacto As JObject = JObject.Parse(ContactoJson)
+
+                    Pais = Contacto("codpais").ToString()
+
+                    If OldPais <> Pais Then
+                        OldPais = Pais
+
+                        ' Buscamos Pais en la tabla de FacturaScripts.
+                        ' Para esto, usamos el campo Pais del pedido que contiene el codigo de pais en formato ISO2 (por ejemplo, ES para España,
+                        ' MX para México, etc.) y lo comparamos con el campo CodPaisISO2 de la tabla Paises.
+                        ' Si encontramos una coincidencia, usamos el campo CodPais de la tabla Paises como codigo de pais
+                        ' para crear el cliente en FacturaScripts. Si no encontramos una coincidencia, dejamos el codigo de pais con el valor actual.
+                        Dim BusquedaPais = URL.TrimEnd("/"c) & "/api/3/pais?filter[codiso]=" & Pais
+                        Dim PaisJson As String = LeerApi(BusquedaPais, API)
+
+                        If PaisJson <> "" Then
+                            Dim Paises As JArray = JArray.Parse(PaisJson)
+                            If Paises.Count > 0 Then
+                                Pais = Paises(0)("codpais").ToString()
+                                Traza.AppendText($"Pais encontrado en FacturaScripts: {Pais}" & vbCrLf)
+                                IdPais = Pais
+                            Else
+                                Traza.AppendText($"Pais con codigo ISO2 {Pais} no encontrado en FacturaScripts, se usará el codigo de pais del pedido." & vbCrLf)
+                            End If
+                        Else
+                            Traza.AppendText($"Error al buscar pais con codigo ISO2 {Pais} en FacturaScripts, se usará el codigo de pais del pedido." & vbCrLf)
+                        End If
+                    Else
+                        Pais = IdPais
+                    End If
                     Debug.Print($"Cliente encontrado en FacturaScripts: CodCliente {CodCliente}")
                 Else
                     Debug.Print($"Error al parsear cliente encontrado en FacturaScripts: {Cliente}")
@@ -1066,11 +1120,38 @@ Public Class FrmMenu
 
             Traza.AppendText($"Cliente para pedido {idPedido}: {CodCliente} ({EmailCliente})" & vbCrLf)
             Traza.Refresh()
+
+            Dim statusPedido As String = pedido("status").ToString()
+            Dim datePedido As DateTime = DateTime.Parse(pedido("date_created").ToString())
+
+            Dim totalPedido As Decimal = Decimal.Parse(pedido("total").ToString())
+            Dim totalTaxPedido As Decimal = Decimal.Parse(pedido("total_tax").ToString())
+            Dim shippingTotalPedido As Decimal = Decimal.Parse(pedido("shipping_total").ToString())
+            Dim shippingTaxTotalPedido As Decimal = Decimal.Parse(pedido("shipping_tax").ToString())
+
+            Dim direcccionFacturacion As String = pedido("billing")("address_1").ToString() & " " & pedido("billing")("address_2").ToString() & ", " & pedido("billing")("city").ToString() & ", " & pedido("billing")("state").ToString() & ", " & pedido("billing")("postcode").ToString()
+            Dim CiudadPedido As String = pedido("billing")("city").ToString()
+            Dim ProvinciaPedido As String = pedido("billing")("state").ToString()
+            Dim CodigoPostalPedido As String = pedido("billing")("postcode").ToString()
+
+            Dim pagoPedido As String = pedido("payment_method").ToString()
+            Dim TipoPagoPedido As String = pedido("payment_method_title").ToString()
+
+            Dim fees As JArray = pedido("fee_lines")
+            Dim lineas As JArray = pedido("line_items")
+            Dim taxes As JArray = pedido("tax_lines")
+            Dim shippingLines As JArray = pedido("shipping_lines")
+
+
+
+
             Debug.Print(CodCliente & " " & "Cliente")
+            Debug.Print(NombreCliente & " " & "NombreCliente")
+            Debug.Print(RazonSocialCliente & " " & "RazonSocialCliente")
+            Debug.Print(Pais & " " & "Pais")
             Debug.Print("")
 
         Next
-
 
 
 

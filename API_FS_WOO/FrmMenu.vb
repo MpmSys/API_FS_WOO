@@ -983,14 +983,10 @@ Public Class FrmMenu
             EmailCliente = pedido("billing")("email").ToString()
             Busqueda = URL.TrimEnd("/"c) & "/api/3/clientes?filter[email]=" & Uri.EscapeDataString(EmailCliente)
 
-            Traza.AppendText("Buscando cliente en FacturaScripts con email: " & EmailCliente & vbCrLf & Busqueda & vbCrLf)
+            Traza.AppendText("Buscando cliente en FacturaScripts con email: " & EmailCliente & vbCrLf)
             Traza.Refresh()
 
             Cliente = LeerApi(Busqueda, API)
-
-            Traza.AppendText(Busqueda & vbCrLf)
-            Traza.AppendText(Cliente & vbCrLf)
-            Traza.Refresh()
 
             Dim CodCliente As String = ""
 
@@ -1031,13 +1027,13 @@ Public Class FrmMenu
                         Dim Paises As JArray = JArray.Parse(PaisJson)
                         If Paises.Count > 0 Then
                             Pais = Paises(0)("codpais").ToString()
-                            Traza.AppendText($"Pais encontrado en FacturaScripts: {Pais}" & vbCrLf)
+                            Debug.Print($"Pais encontrado en FacturaScripts: {Pais}")
                             IdPais = Pais
                         Else
-                            Traza.AppendText($"Pais con codigo ISO2 {Pais} no encontrado en FacturaScripts, se usará el codigo de pais del pedido." & vbCrLf)
+                            Debug.Print($"Pais con codigo ISO2 {Pais} no encontrado en FacturaScripts, se usará el codigo de pais del pedido.")
                         End If
                     Else
-                        Traza.AppendText($"Error al buscar pais con codigo ISO2 {Pais} en FacturaScripts, se usará el codigo de pais del pedido." & vbCrLf)
+                        Debug.Print($"Error al buscar pais con codigo ISO2 {Pais} en FacturaScripts, se usará el codigo de pais del pedido.")
                     End If
                 Else
                     Pais = IdPais
@@ -1055,8 +1051,6 @@ Public Class FrmMenu
                     .pais = Pais
                 })
                 Dim BusquedaCrearCliente = URL.TrimEnd("/"c) & "/api/3/clientes"
-                Traza.AppendText($"Creando cliente en FacturaScripts con los siguientes datos: {ClienteJson}" & vbCrLf)
-                Traza.Refresh()
                 Dim Resultado = CrearApi(BusquedaCrearCliente, ClienteJson, API)
 
                 ' Extraer CodCliente del resultado de la creación
@@ -1099,20 +1093,17 @@ Public Class FrmMenu
                         ' MX para México, etc.) y lo comparamos con el campo CodPaisISO2 de la tabla Paises.
                         ' Si encontramos una coincidencia, usamos el campo CodPais de la tabla Paises como codigo de pais
                         ' para crear el cliente en FacturaScripts. Si no encontramos una coincidencia, dejamos el codigo de pais con el valor actual.
-                        Dim BusquedaPais = URL.TrimEnd("/"c) & "/api/3/pais?filter[codiso]=" & Pais
+                        Dim BusquedaPais = URL.TrimEnd("/"c) & "/api/3/pais?filter[codpais]=" & Pais
                         Dim PaisJson As String = LeerApi(BusquedaPais, API)
 
                         If PaisJson <> "" Then
                             Dim Paises As JArray = JArray.Parse(PaisJson)
                             If Paises.Count > 0 Then
                                 Pais = Paises(0)("codpais").ToString()
-                                Traza.AppendText($"Pais encontrado en FacturaScripts: {Pais}" & vbCrLf)
                                 IdPais = Pais
                             Else
-                                Traza.AppendText($"Pais con codigo ISO2 {Pais} no encontrado en FacturaScripts, se usará el codigo de pais del pedido." & vbCrLf)
                             End If
                         Else
-                            Traza.AppendText($"Error al buscar pais con codigo ISO2 {Pais} en FacturaScripts, se usará el codigo de pais del pedido." & vbCrLf)
                         End If
                     Else
                         Pais = IdPais
@@ -1148,12 +1139,9 @@ Public Class FrmMenu
                 Dim Provincias As JArray = JArray.Parse(NomProvincia)
                 If Provincias.Count > 0 Then
                     ProvinciaPedido = Provincias(0)("provincia").ToString()
-                    Traza.AppendText($"Provincia encontrada en FacturaScripts: {ProvinciaPedido}" & vbCrLf)
                 Else
-                    Traza.AppendText($"Provincia con codigo ISO {ProvinciaPedido} no encontrada en FacturaScripts, se usará el codigo de provincia del pedido." & vbCrLf)
                 End If
             Else
-                Traza.AppendText($"Error al buscar provincia con codigo ISO {ProvinciaPedido} en FacturaScripts, se usará el codigo de provincia del pedido." & vbCrLf)
             End If
 
             Dim pagoPedido As String = pedido("payment_method").ToString()
@@ -1161,7 +1149,6 @@ Public Class FrmMenu
 
             Dim fees As JArray = pedido("fee_lines")
             Dim lineas As JArray = pedido("line_items")
-            Dim taxes As JArray = pedido("tax_lines")
             Dim shippingLines As JArray = pedido("shipping_lines")
 
             Debug.Print(CodCliente & " Cliente " & CifDniCliente)
@@ -1179,123 +1166,47 @@ Public Class FrmMenu
             ' Procesar líneas de productos
             For Each linea As JObject In lineas
                 Dim referencia As String = If(linea("sku") IsNot Nothing, linea("sku").ToString(), "")
-                Dim cantidad As Decimal = Decimal.Parse(linea("quantity").ToString())
+                Dim cantidad As String = linea("quantity").ToString()
                 Dim descripcion As String = linea("name").ToString()
                 Dim pvpunitario As Decimal = Decimal.Parse(linea("price").ToString())
-
-                ' Obtener el impuesto de la línea
-                Dim taxLines As JArray = linea("taxes")
-                Dim codimpuesto As String = ""
-                Dim iva As Decimal = 0
-
-                If taxLines IsNot Nothing AndAlso taxLines.Count > 0 Then
-                    Dim tax As JObject = taxLines(0)
-                    Dim taxRate As Decimal = Decimal.Parse(If(tax("rate") IsNot Nothing, tax("rate").ToString(), "0"))
-                    iva = taxRate
-
-                    If taxRate = 21 Then
-                        codimpuesto = "IVA21"
-                    ElseIf taxRate = 10 Then
-                        codimpuesto = "IVA10"
-                    ElseIf taxRate = 4 Then
-                        codimpuesto = "IVA4"
-                    ElseIf taxRate = 0 Then
-                        codimpuesto = "IVA0"
-                    Else
-                        codimpuesto = "IVA" & taxRate.ToString("0")
-                    End If
-                Else
-                    codimpuesto = "IVA0"
-                    iva = 0
-                End If
 
                 LineasPedido.Add(New With {
                     .referencia = referencia,
                     .cantidad = cantidad,
                     .descripcion = descripcion,
                     .pvpunitario = pvpunitario,
-                    .codimpuesto = codimpuesto,
-                    .iva = iva
+                    .codimpuesto = "IVA21",
+                    .iva = 21
                 })
             Next
 
             ' Procesar líneas de envío
             For Each shippingLine As JObject In shippingLines
                 Dim descripcion As String = shippingLine("method_title").ToString()
-                Dim pvpunitario As Decimal = Decimal.Parse(shippingLine("total").ToString())
-
-                Dim taxLines As JArray = shippingLine("taxes")
-                Dim codimpuesto As String = ""
-                Dim iva As Decimal = 0
-
-                If taxLines IsNot Nothing AndAlso taxLines.Count > 0 Then
-                    Dim tax As JObject = taxLines(0)
-                    Dim taxRate As Decimal = Decimal.Parse(If(tax("rate") IsNot Nothing, tax("rate").ToString(), "0"))
-                    iva = taxRate
-
-                    If taxRate = 21 Then
-                        codimpuesto = "IVA21"
-                    ElseIf taxRate = 10 Then
-                        codimpuesto = "IVA10"
-                    ElseIf taxRate = 4 Then
-                        codimpuesto = "IVA4"
-                    ElseIf taxRate = 0 Then
-                        codimpuesto = "IVA0"
-                    Else
-                        codimpuesto = "IVA" & taxRate.ToString("0")
-                    End If
-                Else
-                    codimpuesto = "IVA0"
-                    iva = 0
-                End If
+                Dim pvpunitario As String = shippingLine("total").ToString()
 
                 LineasPedido.Add(New With {
                     .referencia = "ENVIO",
                     .cantidad = 1,
                     .descripcion = descripcion,
                     .pvpunitario = pvpunitario,
-                    .codimpuesto = codimpuesto,
-                    .iva = iva
+                    .codimpuesto = "IVA21",
+                    .iva = 21
                 })
             Next
 
             ' Procesar fees
             For Each fee As JObject In fees
                 Dim descripcion As String = fee("name").ToString()
-                Dim pvpunitario As Decimal = Decimal.Parse(fee("total").ToString())
-
-                Dim taxLines As JArray = fee("taxes")
-                Dim codimpuesto As String = ""
-                Dim iva As Decimal = 0
-
-                If taxLines IsNot Nothing AndAlso taxLines.Count > 0 Then
-                    Dim tax As JObject = taxLines(0)
-                    Dim taxRate As Decimal = Decimal.Parse(If(tax("rate") IsNot Nothing, tax("rate").ToString(), "0"))
-                    iva = taxRate
-
-                    If taxRate = 21 Then
-                        codimpuesto = "IVA21"
-                    ElseIf taxRate = 10 Then
-                        codimpuesto = "IVA10"
-                    ElseIf taxRate = 4 Then
-                        codimpuesto = "IVA4"
-                    ElseIf taxRate = 0 Then
-                        codimpuesto = "IVA0"
-                    Else
-                        codimpuesto = "IVA" & taxRate.ToString("0")
-                    End If
-                Else
-                    codimpuesto = "IVA0"
-                    iva = 0
-                End If
+                Dim pvpunitario As String = fee("amount").ToString()
 
                 LineasPedido.Add(New With {
                     .referencia = "SEGURO",
                     .cantidad = 1,
                     .descripcion = descripcion,
                     .pvpunitario = pvpunitario,
-                    .codimpuesto = codimpuesto,
-                    .iva = iva
+                    .codimpuesto = "IVA21",
+                    .iva = 21
                 })
             Next
 
@@ -1304,6 +1215,7 @@ Public Class FrmMenu
 
             Debug.Print("Líneas del pedido " & idPedido & ": " & LineasPedidoJson)
             Traza.AppendText($"Líneas procesadas: {LineasPedido.Count}" & vbCrLf)
+            Traza.Refresh()
 
             ' preparamos el JSON de la factura usando estos campos
             ' CodCliente -> CodCliente 
@@ -1332,8 +1244,6 @@ Public Class FrmMenu
                 .fecha = datePedido.ToString("yyyy-MM-dd"),
                 .hora = datePedido.ToString("HH:mm:ss"),
                 .numero2 = idPedido,
-                .total = totalPedido,
-                .totaliva = totalTaxPedido,
                 .lineas = LineasPedidoJson
             })
 

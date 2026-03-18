@@ -246,7 +246,11 @@ Public Class FrmMenu
                 For Each prop As JProperty In jo.Properties()
                     Dim name As String = prop.Name
                     Dim value As String = If(prop.Value Is Nothing, "", prop.Value.ToString())
-                    parts.Add(Uri.EscapeDataString(name) & "=" & Uri.EscapeDataString(value))
+                    'parts.Add(Uri.EscapeDataString(name) & "=" & Uri.EscapeDataString(value))
+
+                    parts.Add(name & "=" & value)
+
+
                 Next
                 postData = String.Join("&", parts)
             Catch ex As Exception
@@ -965,7 +969,7 @@ Public Class FrmMenu
             If pedido("status").ToString() = "pending" Then Facturar = False
             If pedido("status").ToString() = "esperando-tu-pago" Then Facturar = False
 
-            If Not facturar Then
+            If Not Facturar Then
                 Traza.AppendText($"Pedido {idPedido} está en estado {pedido("status").ToString()}, no se puede facturar." & vbCrLf)
                 Traza.Refresh()
                 Continue For
@@ -979,7 +983,7 @@ Public Class FrmMenu
             EmailCliente = pedido("billing")("email").ToString()
             Busqueda = URL.TrimEnd("/"c) & "/api/3/clientes?filter[email]=" & Uri.EscapeDataString(EmailCliente)
 
-            Traza.AppendText("Buscando cliente en FacturaScripts con email: " & emailCliente & vbCrLf & Busqueda & vbCrLf)
+            Traza.AppendText("Buscando cliente en FacturaScripts con email: " & EmailCliente & vbCrLf & Busqueda & vbCrLf)
             Traza.Refresh()
 
             Cliente = LeerApi(Busqueda, API)
@@ -1074,6 +1078,7 @@ Public Class FrmMenu
                 Dim Clientes As JArray = JArray.Parse(Cliente)
                 If Clientes.Count > 0 Then
                     CodCliente = Clientes(0)("codcliente").ToString()
+                    CifDniCliente = Clientes(0)("cifnif").ToString()
                     NombreCliente = Clientes(0)("nombre").ToString()
                     RazonSocialCliente = Clientes(0)("razonsocial").ToString()
 
@@ -1124,15 +1129,32 @@ Public Class FrmMenu
             Dim statusPedido As String = pedido("status").ToString()
             Dim datePedido As DateTime = DateTime.Parse(pedido("date_created").ToString())
 
-            Dim totalPedido As Decimal = Decimal.Parse(pedido("total").ToString())
-            Dim totalTaxPedido As Decimal = Decimal.Parse(pedido("total_tax").ToString())
-            Dim shippingTotalPedido As Decimal = Decimal.Parse(pedido("shipping_total").ToString())
-            Dim shippingTaxTotalPedido As Decimal = Decimal.Parse(pedido("shipping_tax").ToString())
+            Dim totalPedido As String = pedido("total").ToString()
+            Dim totalTaxPedido As String = pedido("total_tax").ToString()
+            Dim shippingTotalPedido As String = pedido("shipping_total").ToString()
+            Dim shippingTaxTotalPedido As String = pedido("shipping_tax").ToString()
 
             Dim direcccionFacturacion As String = pedido("billing")("address_1").ToString() & " " & pedido("billing")("address_2").ToString() & ", " & pedido("billing")("city").ToString() & ", " & pedido("billing")("state").ToString() & ", " & pedido("billing")("postcode").ToString()
             Dim CiudadPedido As String = pedido("billing")("city").ToString()
-            Dim ProvinciaPedido As String = pedido("billing")("state").ToString()
             Dim CodigoPostalPedido As String = pedido("billing")("postcode").ToString()
+            Dim ProvinciaPedido As String = pedido("billing")("state").ToString()
+
+            ' leemos el nombre de la provincia en la Api de Facturascripts con el campo ProvinciaPedido que contiene el codigo
+            ' de la provincia en formato ISO y el campo Pais que contiene el codigo de pais en formato ISO2. 
+
+            Dim BusquedaProvincia As String = URL.TrimEnd("/"c) & "/api/3/provincias?filter[codisoprov]=" & ProvinciaPedido & "&filter[codpais]=" & Pais
+            Dim NomProvincia As String = LeerApi(BusquedaProvincia, API)
+            If NomProvincia <> "" Then
+                Dim Provincias As JArray = JArray.Parse(NomProvincia)
+                If Provincias.Count > 0 Then
+                    ProvinciaPedido = Provincias(0)("provincia").ToString()
+                    Traza.AppendText($"Provincia encontrada en FacturaScripts: {ProvinciaPedido}" & vbCrLf)
+                Else
+                    Traza.AppendText($"Provincia con codigo ISO {ProvinciaPedido} no encontrada en FacturaScripts, se usará el codigo de provincia del pedido." & vbCrLf)
+                End If
+            Else
+                Traza.AppendText($"Error al buscar provincia con codigo ISO {ProvinciaPedido} en FacturaScripts, se usará el codigo de provincia del pedido." & vbCrLf)
+            End If
 
             Dim pagoPedido As String = pedido("payment_method").ToString()
             Dim TipoPagoPedido As String = pedido("payment_method_title").ToString()
@@ -1142,15 +1164,196 @@ Public Class FrmMenu
             Dim taxes As JArray = pedido("tax_lines")
             Dim shippingLines As JArray = pedido("shipping_lines")
 
-
-
-
-            Debug.Print(CodCliente & " " & "Cliente")
+            Debug.Print(CodCliente & " Cliente " & CifDniCliente)
             Debug.Print(NombreCliente & " " & "NombreCliente")
             Debug.Print(RazonSocialCliente & " " & "RazonSocialCliente")
             Debug.Print(Pais & " " & "Pais")
-            Debug.Print("")
 
+            ' Para cada linea del pedido, obtenemos el producto o servicio, la cantidad, el precio unitario, el total y los impuestos,
+            ' y los grabamos en un JSON LineasPedido para enviarlo a la API de creación de facturas de FacturaScripts.
+            ' Ha de tener la siguiente estructura:
+            ' [{"referencia":"gc-4795","cantidad":1,"descripcion":"Servicio de Grading PRO","pvpunitario":127.68595,"codimpuesto":"IVA21","iva":21}]
+
+            Dim LineasPedido As New List(Of Object)()
+
+            ' Procesar líneas de productos
+            For Each linea As JObject In lineas
+                Dim referencia As String = If(linea("sku") IsNot Nothing, linea("sku").ToString(), "")
+                Dim cantidad As Decimal = Decimal.Parse(linea("quantity").ToString())
+                Dim descripcion As String = linea("name").ToString()
+                Dim pvpunitario As Decimal = Decimal.Parse(linea("price").ToString())
+
+                ' Obtener el impuesto de la línea
+                Dim taxLines As JArray = linea("taxes")
+                Dim codimpuesto As String = ""
+                Dim iva As Decimal = 0
+
+                If taxLines IsNot Nothing AndAlso taxLines.Count > 0 Then
+                    Dim tax As JObject = taxLines(0)
+                    Dim taxRate As Decimal = Decimal.Parse(If(tax("rate") IsNot Nothing, tax("rate").ToString(), "0"))
+                    iva = taxRate
+
+                    If taxRate = 21 Then
+                        codimpuesto = "IVA21"
+                    ElseIf taxRate = 10 Then
+                        codimpuesto = "IVA10"
+                    ElseIf taxRate = 4 Then
+                        codimpuesto = "IVA4"
+                    ElseIf taxRate = 0 Then
+                        codimpuesto = "IVA0"
+                    Else
+                        codimpuesto = "IVA" & taxRate.ToString("0")
+                    End If
+                Else
+                    codimpuesto = "IVA0"
+                    iva = 0
+                End If
+
+                LineasPedido.Add(New With {
+                    .referencia = referencia,
+                    .cantidad = cantidad,
+                    .descripcion = descripcion,
+                    .pvpunitario = pvpunitario,
+                    .codimpuesto = codimpuesto,
+                    .iva = iva
+                })
+            Next
+
+            ' Procesar líneas de envío
+            For Each shippingLine As JObject In shippingLines
+                Dim descripcion As String = shippingLine("method_title").ToString()
+                Dim pvpunitario As Decimal = Decimal.Parse(shippingLine("total").ToString())
+
+                Dim taxLines As JArray = shippingLine("taxes")
+                Dim codimpuesto As String = ""
+                Dim iva As Decimal = 0
+
+                If taxLines IsNot Nothing AndAlso taxLines.Count > 0 Then
+                    Dim tax As JObject = taxLines(0)
+                    Dim taxRate As Decimal = Decimal.Parse(If(tax("rate") IsNot Nothing, tax("rate").ToString(), "0"))
+                    iva = taxRate
+
+                    If taxRate = 21 Then
+                        codimpuesto = "IVA21"
+                    ElseIf taxRate = 10 Then
+                        codimpuesto = "IVA10"
+                    ElseIf taxRate = 4 Then
+                        codimpuesto = "IVA4"
+                    ElseIf taxRate = 0 Then
+                        codimpuesto = "IVA0"
+                    Else
+                        codimpuesto = "IVA" & taxRate.ToString("0")
+                    End If
+                Else
+                    codimpuesto = "IVA0"
+                    iva = 0
+                End If
+
+                LineasPedido.Add(New With {
+                    .referencia = "ENVIO",
+                    .cantidad = 1,
+                    .descripcion = descripcion,
+                    .pvpunitario = pvpunitario,
+                    .codimpuesto = codimpuesto,
+                    .iva = iva
+                })
+            Next
+
+            ' Procesar fees
+            For Each fee As JObject In fees
+                Dim descripcion As String = fee("name").ToString()
+                Dim pvpunitario As Decimal = Decimal.Parse(fee("total").ToString())
+
+                Dim taxLines As JArray = fee("taxes")
+                Dim codimpuesto As String = ""
+                Dim iva As Decimal = 0
+
+                If taxLines IsNot Nothing AndAlso taxLines.Count > 0 Then
+                    Dim tax As JObject = taxLines(0)
+                    Dim taxRate As Decimal = Decimal.Parse(If(tax("rate") IsNot Nothing, tax("rate").ToString(), "0"))
+                    iva = taxRate
+
+                    If taxRate = 21 Then
+                        codimpuesto = "IVA21"
+                    ElseIf taxRate = 10 Then
+                        codimpuesto = "IVA10"
+                    ElseIf taxRate = 4 Then
+                        codimpuesto = "IVA4"
+                    ElseIf taxRate = 0 Then
+                        codimpuesto = "IVA0"
+                    Else
+                        codimpuesto = "IVA" & taxRate.ToString("0")
+                    End If
+                Else
+                    codimpuesto = "IVA0"
+                    iva = 0
+                End If
+
+                LineasPedido.Add(New With {
+                    .referencia = "SEGURO",
+                    .cantidad = 1,
+                    .descripcion = descripcion,
+                    .pvpunitario = pvpunitario,
+                    .codimpuesto = codimpuesto,
+                    .iva = iva
+                })
+            Next
+
+            ' Serializar a JSON
+            Dim LineasPedidoJson As String = JsonConvert.SerializeObject(LineasPedido)
+
+            Debug.Print("Líneas del pedido " & idPedido & ": " & LineasPedidoJson)
+            Traza.AppendText($"Líneas procesadas: {LineasPedido.Count}" & vbCrLf)
+
+            ' preparamos el JSON de la factura usando estos campos
+            ' CodCliente -> CodCliente 
+            ' cifnif -> CifDniCliente 
+            ' NombreCliente -> RazonSocialCliente 
+            ' direccion -> direcccionFacturacion
+            ' ciudad -> CiudadPedido
+            ' provincia -> ProvinciaPedido
+            ' codpostal -> CodigoPostalPedido
+            ' codpais -> Pais
+            ' fecha -> datePedido
+            ' hora -> datePedido
+            ' numero2 -> idPedido
+            ' total -> totalPedido
+            ' totaliva -> totalTaxPedido
+
+            Dim FacturaJson As String = JsonConvert.SerializeObject(New With {
+                .codcliente = CodCliente,
+                .cifnif = CifDniCliente,
+                .nombre = RazonSocialCliente,
+                .direccion = direcccionFacturacion,
+                .ciudad = CiudadPedido,
+                .provincia = ProvinciaPedido,
+                .codpostal = CodigoPostalPedido,
+                .codpais = Pais,
+                .fecha = datePedido.ToString("yyyy-MM-dd"),
+                .hora = datePedido.ToString("HH:mm:ss"),
+                .numero2 = idPedido,
+                .total = totalPedido,
+                .totaliva = totalTaxPedido,
+                .lineas = LineasPedidoJson
+            })
+
+            ' grabamos con la API de FacturaScripts la factura.
+            ' Para esto, usamos el endpoint de creación de facturas de la API de FacturaScripts.
+
+            Dim resultadoFactura = CrearApi(URL.TrimEnd("/"c) & "/api/3/crearFacturaCliente", FacturaJson, API)
+
+            Debug.Print($"Resultado al crear factura para pedido {idPedido}: {resultadoFactura}")
+
+
+
+
+
+
+
+
+
+
+            Debug.Print("")
         Next
 
 

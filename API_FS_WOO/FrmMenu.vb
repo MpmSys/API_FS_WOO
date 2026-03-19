@@ -915,6 +915,8 @@ Public Class FrmMenu
         Dim Pais As String = ""
         Dim CifDniCliente As String = ""
 
+        Dim NumTest As Integer = 0
+
         ' Abrimos la Base de datos para seleccionar los pedidos que se van a facturar
         Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
         Dim conn As New OleDb.OleDbConnection(connString)
@@ -1170,6 +1172,21 @@ Public Class FrmMenu
                 Dim descripcion As String = linea("name").ToString()
                 Dim pvpunitario As Decimal = Decimal.Parse(linea("price").ToString())
 
+                ' verificamos si la linea en el campo meta_data tiene las claves
+                ' Detalle cartas
+                ' Tipo de servicio
+                ' Si las tiene, añadimos esa información a la descripción de la linea.
+                Dim metaData As JArray = linea("meta_data")
+
+                For Each meta As JObject In metaData
+                    If meta("key").ToString() = "Detalles cartas" Then
+                        descripcion &= vbCrLf & "Detalles cartas" & vbCrLf & meta("value").ToString().Replace("<br>", vbCrLf).Replace("<br/>", vbCrLf).Replace("<BR>", vbCrLf)
+                    End If
+                    If meta("key").ToString() = "Tipo de servicio" Then
+                        descripcion &= vbCrLf & "Tipo de servicio - " & meta("value").ToString()
+                    End If
+                Next
+
                 LineasPedido.Add(New With {
                     .referencia = referencia,
                     .cantidad = cantidad,
@@ -1232,6 +1249,21 @@ Public Class FrmMenu
             ' total -> totalPedido
             ' totaliva -> totalTaxPedido
 
+            Dim pagada As String = "0"
+            Dim formaPago As String = "Otro"
+
+            If pedido("payment_method").ToString() = "redsys" Then
+                formaPago = "TARJETA"
+                pagada = "1"
+            End If
+
+            If pedido("payment_method").ToString() = "tarjeta" Then formaPago = "TARJTIENDA"
+            If pedido("payment_method").ToString() = "pos_cash" Then formaPago = "CONT"
+            If pedido("payment_method").ToString() = "cod" Then formaPago = "CONT"
+            If pedido("payment_method").ToString() = "efectivo" Then formaPago = "CONT"
+            If pedido("payment_method").ToString() = "bacs" Then formaPago = "TRANS"
+            If pedido("payment_method").ToString() = "transferencia" Then formaPago = "TRANS"
+
             Dim FacturaJson As String = JsonConvert.SerializeObject(New With {
                 .codcliente = CodCliente,
                 .cifnif = CifDniCliente,
@@ -1241,9 +1273,12 @@ Public Class FrmMenu
                 .provincia = ProvinciaPedido,
                 .codpostal = CodigoPostalPedido,
                 .codpais = Pais,
+                .fechadevengo = datePedido.ToString("yyyy-MM-dd"),
                 .fecha = datePedido.ToString("yyyy-MM-dd"),
                 .hora = datePedido.ToString("HH:mm:ss"),
                 .numero2 = idPedido,
+                .codpago = formaPago,
+                .pagada = pagada,
                 .lineas = LineasPedidoJson
             })
 
@@ -1254,16 +1289,51 @@ Public Class FrmMenu
 
             Debug.Print($"Resultado al crear factura para pedido {idPedido}: {resultadoFactura}")
 
+            ' Si la factura se ha creado correctamente, devuelve un JSON con el id de la factura creada, por ejemplo: {"doc":{"apartado":"","cifnif":"03942072",...,
+            ' si se ha creado correctamente la factura, actualizamos el estado del pedido a "FACTURADO" y la fecha de facturación en la base de datos.
+            ' Si no se ha creado correctamente, dejamos el estado del pedido sin actualizar para intentar facturarlo en la próxima ejecución.
 
 
+            ' Verificar si la factura se creó correctamente
+            If Not String.IsNullOrEmpty(resultadoFactura) Then
+                Try
+                    Dim facturaCreada As JObject = JObject.Parse(resultadoFactura)
+
+                    ' Comprobar si existe el nodo "doc" que indica éxito
+                    If facturaCreada("doc") IsNot Nothing Then
+                        ' Factura creada exitosamente - actualizar estado del pedido
+                        Dim fechaActual As DateTime = DateTime.Now
+                        Dim updateCmd As New OleDb.OleDbCommand($"UPDATE Pedidos SET Estado = 'FACTURADO', Fecha = #{fechaActual:MM/dd/yyyy HH:mm:ss}# WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
+                        updateCmd.Parameters.AddWithValue("@IdWeb", WebId)
+                        updateCmd.Parameters.AddWithValue("@IdPedido", idPedido)
+                        updateCmd.ExecuteNonQuery()
+
+                        Traza.AppendText($"✓ Pedido {idPedido} facturado correctamente" & vbCrLf)
+                        Debug.Print($"Pedido {idPedido} marcado como FACTURADO")
+                    Else
+                        ' Error en la creación - mantener estado NULL para reintentar
+                        Traza.AppendText($"✗ Error al facturar pedido {idPedido}: {resultadoFactura}" & vbCrLf)
+                        Debug.Print($"Error en facturación pedido {idPedido}: {resultadoFactura}")
+                    End If
+
+                Catch ex As Exception
+                    ' Error al parsear respuesta - mantener estado NULL
+                    Traza.AppendText($"✗ Error al procesar respuesta para pedido {idPedido}: {ex.Message}" & vbCrLf)
+                    Debug.Print($"Excepción al procesar factura pedido {idPedido}: {ex.ToString()}")
+                End Try
+            Else
+                ' No hay respuesta - mantener estado NULL
+                Traza.AppendText($"✗ Sin respuesta al crear factura para pedido {idPedido}" & vbCrLf)
+            End If
+            Traza.Refresh()
+
+            ' pausamos por 15 segundos entre cada factura para no saturar el servidor de FacturaScripts y para evitar problemas de timeout o de bloqueo por parte del servidor de FacturaScripts.
+            Threading.Thread.Sleep(5000)
 
 
+            NumTest += 1
+            If NumTest >= 25 Then Exit For
 
-
-
-
-
-            Debug.Print("")
         Next
 
 

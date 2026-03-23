@@ -714,6 +714,7 @@ Public Class FrmMenu
             .AutomaticDecompression = DecompressionMethods.GZip Or DecompressionMethods.Deflate
         }
 
+        Traza.Text = ""
 
         Using client As New HttpClient(handler)
             client.Timeout = TimeSpan.FromSeconds(60)
@@ -923,7 +924,7 @@ Public Class FrmMenu
         conn.Open()
 
         ' leemos los parametros TESTURL y TESTAPI de la tabla PARAMETROS para saber si estamos en modo test o no.
-        ' En modo test, se facturan los pedidos en el entorno de pruebas de FacturaScripts, y en modo normal se facturan en el entorno de producción de FacturaScripts.
+        ' En modo test, se facturan los pedidos en el entorno de emociones de FacturaScripts, y en modo normal se facturan en el entorno de producción de FacturaScripts.
         Dim cmdTestUrl As New OleDb.OleDbCommand("SELECT VALPAR FROM PARAMETROS WHERE NOMPAR = 'TESTURL'", conn)
         If cmdTestUrl.ExecuteScalar() IsNot Nothing Then
             Dim testUrl As String = cmdTestUrl.ExecuteScalar().ToString()
@@ -1324,15 +1325,31 @@ Public Class FrmMenu
             Else
                 ' No hay respuesta - mantener estado NULL
                 Traza.AppendText($"✗ Sin respuesta al crear factura para pedido {idPedido}" & vbCrLf)
+                ' Grabo en Traza.txt el pedido que ha fallado para facturar, para poder revisarlo posteriormente.
+                ' El fichero Traza.txt se encuentra en la misma carpeta que la base de datos Api_Woocommerce.mdb
+                Try
+                    Dim rutaTraza As String = BaseDatos & "\Traza.txt"
+                    Using writer As New StreamWriter(rutaTraza, True, System.Text.Encoding.UTF8)
+                        writer.WriteLine("=========================================")
+                        writer.WriteLine($"Fecha: {DateTime.Now:yyyy-MM-dd HH:mm:ss}")
+                        writer.WriteLine($"Pedido sin respuesta: {idPedido}")
+                        writer.WriteLine($"Líneas del pedido:")
+                        writer.WriteLine(LineasPedidoJson)
+                        writer.WriteLine("=========================================")
+                        writer.WriteLine()
+                    End Using
+                Catch exFile As Exception
+                    Debug.Print($"Error al escribir en Traza.txt: {exFile.Message}")
+                End Try
             End If
             Traza.Refresh()
 
-            ' pausamos por 15 segundos entre cada factura para no saturar el servidor de FacturaScripts y para evitar problemas de timeout o de bloqueo por parte del servidor de FacturaScripts.
+            ' pausamos por 5 segundos entre cada factura para no saturar el servidor de FacturaScripts y para evitar problemas de timeout o de bloqueo por parte del servidor de FacturaScripts.
             Threading.Thread.Sleep(5000)
 
 
             NumTest += 1
-            If NumTest >= 25 Then Exit For
+            If NumTest >= 150 Then Exit For
 
         Next
 

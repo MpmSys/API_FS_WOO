@@ -918,6 +918,9 @@ Public Class FrmMenu
 
         Dim NumTest As Integer = 0
 
+        Dim LastFecha As String = "01/01/2000 00:00:00"
+        Dim FechaPedido As String = ""
+
         ' Abrimos la Base de datos para seleccionar los pedidos que se van a facturar
         Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
         Dim conn As New OleDb.OleDbConnection(connString)
@@ -935,6 +938,12 @@ Public Class FrmMenu
         If cmdTestApi.ExecuteScalar() IsNot Nothing Then
             Dim testApi As String = cmdTestApi.ExecuteScalar().ToString()
             API = testApi
+        End If
+
+        ' lectura del parametros LASTFECHA de la tabla PARAMETROS para saber la fecha del último pedido facturado. De esta forma, solo facturamos los pedidos que han sido creados o modificados después de esa fecha.
+        Dim cmdLastFecha As New OleDb.OleDbCommand("SELECT VALPAR FROM PARAMETROS WHERE NOMPAR = 'LASTFECHA'", conn)
+        If cmdLastFecha.ExecuteScalar() IsNot Nothing Then
+            LastFecha = cmdLastFecha.ExecuteScalar().ToString()
         End If
 
         Traza.Text = ""
@@ -955,8 +964,8 @@ Public Class FrmMenu
 
         ' para cada pedido a facturar leemos el pedido de WooCommerce
         For Each idPedido As String In pedidosAFacturar
-            'Traza.AppendText($"Facturando pedido {idPedido}..." & vbCrLf)
-            'Traza.Refresh()
+            Traza.Text = ($"Facturando pedido {idPedido}..." & vbCrLf)
+            Traza.Refresh()
 
             Dim pedido As Object = Nothing
             pedido = LeerPedidoWoo(idPedido)
@@ -1231,6 +1240,12 @@ Public Class FrmMenu
             ' Serializar a JSON
             Dim LineasPedidoJson As String = JsonConvert.SerializeObject(LineasPedido)
 
+            ' Transformamos unas cadenas para evitar errores
+            ' \\&#039; -> .
+            ' &amp; -> _and_
+            LineasPedidoJson = LineasPedidoJson.Replace("\\&#039;", ".").Replace("&amp;", "_and_")
+            LineasPedidoJson = LineasPedidoJson.Replace("&#039;", ".").Replace("\t", "_")
+
             Debug.Print("Líneas del pedido " & idPedido & ": " & LineasPedidoJson)
             Traza.AppendText($"Líneas procesadas: {LineasPedido.Count}" & vbCrLf)
             Traza.Refresh()
@@ -1265,6 +1280,16 @@ Public Class FrmMenu
             If pedido("payment_method").ToString() = "bacs" Then formaPago = "TRANS"
             If pedido("payment_method").ToString() = "transferencia" Then formaPago = "TRANS"
 
+            FechaPedido = datePedido.ToString("yyyy-MM-dd HH:mm:ss")
+
+            ' si la fecha del pedido es anterior a la fecha del último pedido facturado (LastFecha),facturamos con LastFecha ya que no
+            ' pueden existir saltos de fecha entre pedidos, y de esta forma nos aseguramos de facturar todos los pedidos aunque existan saltos de fecha.
+            If DateDiff(DateInterval.Second, DateTime.Parse(datePedido), DateTime.Parse(LastFecha)) < 0 Then
+                FechaPedido = datePedido.ToString("yyyy-MM-dd HH:mm:ss")
+            Else
+                FechaPedido = LastFecha
+            End If
+
             Dim FacturaJson As String = JsonConvert.SerializeObject(New With {
                 .codcliente = CodCliente,
                 .cifnif = CifDniCliente,
@@ -1275,13 +1300,15 @@ Public Class FrmMenu
                 .codpostal = CodigoPostalPedido,
                 .codpais = Pais,
                 .fechadevengo = datePedido.ToString("yyyy-MM-dd"),
-                .fecha = datePedido.ToString("yyyy-MM-dd"),
-                .hora = datePedido.ToString("HH:mm:ss"),
+                .fecha = FechaPedido.Substring(0, 10),
+                .hora = FechaPedido.Substring(11, 8),
                 .numero2 = idPedido,
                 .codpago = formaPago,
                 .pagada = pagada,
                 .lineas = LineasPedidoJson
             })
+
+            LastFecha = datePedido.ToString("yyyy-MM-dd HH:mm:ss")
 
             ' grabamos con la API de FacturaScripts la factura.
             ' Para esto, usamos el endpoint de creación de facturas de la API de FacturaScripts.
@@ -1348,13 +1375,21 @@ Public Class FrmMenu
             Threading.Thread.Sleep(5000)
 
 
-            NumTest += 1
-            If NumTest >= 150 Then Exit For
+            ' Grabamos LastFecha con la fecha de creación del pedido que acabamos de facturar, para usarlo como punto de partida en la próxima ejecución y solo facturar los pedidos que han sido creados o modificados después de esa fecha.
+            If Not String.IsNullOrEmpty(LastFecha) Then
+                Dim cmdUpdate As New OleDb.OleDbCommand("UPDATE PARAMETROS SET VALPAR = ? WHERE NOMPAR = 'LASTFECHA'", conn)
+                cmdUpdate.Parameters.AddWithValue("?", LastFecha)
+                Dim rowsAffected As Integer = cmdUpdate.ExecuteNonQuery()
 
+                ' Si no se actualizó ningún registro, insertamos uno nuevo
+                If rowsAffected = 0 Then
+                    Dim cmdInsert As New OleDb.OleDbCommand("INSERT INTO PARAMETROS (NOMPAR, VALPAR) VALUES (?, ?)", conn)
+                    cmdInsert.Parameters.AddWithValue("?", "LASTFECHA")
+                    cmdInsert.Parameters.AddWithValue("?", LastFecha)
+                    cmdInsert.ExecuteNonQuery()
+                End If
+            End If
         Next
-
-
-
 
         ' cierre de la conexión a la base de datos
         conn.Close()

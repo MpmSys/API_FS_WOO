@@ -776,6 +776,7 @@ Public Class FrmMenu
             "Pedidos.[Estado] <> 'OLD' " &
             "And Pedidos.[Estado] <> 'FACTURADO' " &
             "And Pedidos.[Estado] <> 'ANULADO' " &
+            "And Pedidos.[Estado] <> 'CANCELADO' " &
             ") " &
             "Or Pedidos.[Estado] Is NULL " &
             "ORDER BY Pedidos.IdPedido;", conn)
@@ -994,11 +995,15 @@ Public Class FrmMenu
             ' Construir la URL con el email correctamente codificado
             EmailCliente = pedido("billing")("email").ToString()
             Busqueda = URL.TrimEnd("/"c) & "/api/3/clientes?filter[email]=" & Uri.EscapeDataString(EmailCliente)
+            'Busqueda = URL.TrimEnd("/"c) & "/api/3/clientes?filter[email]=" & EmailCliente
 
             Traza.AppendText("Buscando cliente en FacturaScripts con email: " & EmailCliente & vbCrLf)
             Traza.Refresh()
 
             Cliente = LeerApi(Busqueda, API)
+
+            Dim PedidoRelacionado As Boolean = False
+            Dim relatedOrderId As String = ""
 
             Dim CodCliente As String = ""
 
@@ -1006,23 +1011,48 @@ Public Class FrmMenu
 
                 Debug.Print($"Cliente con email {pedido("billing")("email").ToString()} no encontrado en FacturaScripts, se creará un nuevo cliente al facturar el pedido.")
 
-                NombreCliente = pedido("billing")("first_name").ToString() & " " & pedido("billing")("last_name").ToString()
-                EmailCliente = pedido("billing")("email").ToString()
-                TelefonoCliente = pedido("billing")("phone").ToString()
-                ' si company no esta en blanco RazonSocialCliente es company, si no, es el nombre del cliente
-                RazonSocialCliente = If(String.IsNullOrEmpty(pedido("billing")("company").ToString()), pedido("billing")("last_name").ToString() & " " & pedido("billing")("first_name").ToString(), pedido("billing")("company").ToString())
-                Pais = pedido("billing")("country").ToString()
-
-                ' Extraer _billing_nif de meta_data
+                ' Extraer meta_data
                 Dim metaData As JArray = pedido("meta_data")
                 CifDniCliente = ""
 
+                ' comprobamos que en meta_data hay una referencia con clave _psa_related_order_id
+                ' si existe buscamos el pedido relacionado para recoger los datos del cliente
                 For Each meta As JObject In metaData
-                    If meta("key").ToString() = "_billing_nif" Then
-                        CifDniCliente = meta("value").ToString()
-                        Exit For
+                    If meta("key").ToString() = "_billing_nif" Then CifDniCliente = meta("value").ToString()
+                    If meta("key").ToString() = "_psa_related_order_id" Then
+                        relatedOrderId = meta("value").ToString()
+                        Traza.AppendText($"Pedido relacionado encontrado: {relatedOrderId}" & vbCrLf)
+                        Traza.Refresh()
+
+                        Dim relatedPedido As Object = LeerPedidoWoo(relatedOrderId)
+                        If relatedPedido IsNot Nothing Then
+                            PedidoRelacionado = True
+                            NombreCliente = relatedPedido("billing")("first_name").ToString() & " " & relatedPedido("billing")("last_name").ToString()
+                            EmailCliente = relatedPedido("billing")("email").ToString()
+                            TelefonoCliente = relatedPedido("billing")("phone").ToString()
+                            RazonSocialCliente = If(String.IsNullOrEmpty(relatedPedido("billing")("company").ToString()), relatedPedido("billing")("last_name").ToString() & " " & relatedPedido("billing")("first_name").ToString(), relatedPedido("billing")("company").ToString())
+                            Pais = relatedPedido("billing")("country").ToString()
+                        End If
                     End If
                 Next
+
+                If Not PedidoRelacionado Then
+                    NombreCliente = pedido("billing")("first_name").ToString() & " " & pedido("billing")("last_name").ToString()
+                    If NombreCliente.Trim() = "" Then Continue For
+                    EmailCliente = pedido("billing")("email").ToString()
+                    TelefonoCliente = pedido("billing")("phone").ToString()
+                    ' si company no esta en blanco RazonSocialCliente es company, si no, es el nombre del cliente
+                    RazonSocialCliente = If(String.IsNullOrEmpty(pedido("billing")("company").ToString()), pedido("billing")("last_name").ToString() & " " & pedido("billing")("first_name").ToString(), pedido("billing")("company").ToString())
+                    Pais = pedido("billing")("country").ToString()
+
+                    ' Extraer _billing_nif de meta_data
+                    For Each meta As JObject In metaData
+                        If meta("key").ToString() = "_billing_nif" Then
+                            CifDniCliente = meta("value").ToString()
+                            Exit For
+                        End If
+                    Next
+                End If
 
                 If OldPais <> Pais Then
                     OldPais = Pais
@@ -1226,9 +1256,11 @@ Public Class FrmMenu
             For Each fee As JObject In fees
                 Dim descripcion As String = fee("name").ToString()
                 Dim pvpunitario As String = fee("amount").ToString()
+                Dim CodFee As String = "SEGURO"
+                If descripcion.ToUpper().Contains("RECARGO") Then CodFee = "RECARGO"
 
                 LineasPedido.Add(New With {
-                    .referencia = "SEGURO",
+                    .referencia = CodFee,
                     .cantidad = 1,
                     .descripcion = descripcion,
                     .pvpunitario = pvpunitario,
@@ -1267,6 +1299,7 @@ Public Class FrmMenu
 
             Dim pagada As String = "0"
             Dim formaPago As String = "Otro"
+            formaPago = "TRANS"
 
             If pedido("payment_method").ToString() = "redsys" Then
                 formaPago = "TARJETA"
@@ -1290,6 +1323,9 @@ Public Class FrmMenu
                 FechaPedido = LastFecha
             End If
 
+            Dim Observaciones As String = ""
+            If PedidoRelacionado Then Observaciones = "Pedido relacionado: " & relatedOrderId
+
             Dim FacturaJson As String = JsonConvert.SerializeObject(New With {
                 .codcliente = CodCliente,
                 .cifnif = CifDniCliente,
@@ -1305,10 +1341,12 @@ Public Class FrmMenu
                 .numero2 = idPedido,
                 .codpago = formaPago,
                 .pagada = pagada,
+                .observaciones = Observaciones,
                 .lineas = LineasPedidoJson
             })
 
             LastFecha = datePedido.ToString("yyyy-MM-dd HH:mm:ss")
+            LastFecha = FechaPedido
 
             ' grabamos con la API de FacturaScripts la factura.
             ' Para esto, usamos el endpoint de creación de facturas de la API de FacturaScripts.
@@ -1362,6 +1400,9 @@ Public Class FrmMenu
                         writer.WriteLine($"Pedido sin respuesta: {idPedido}")
                         writer.WriteLine($"Líneas del pedido:")
                         writer.WriteLine(LineasPedidoJson)
+                        writer.WriteLine("=========================================")
+                        writer.WriteLine($"JSON enviado para crear factura:")
+                        writer.WriteLine(FacturaJson)
                         writer.WriteLine("=========================================")
                         writer.WriteLine()
                     End Using

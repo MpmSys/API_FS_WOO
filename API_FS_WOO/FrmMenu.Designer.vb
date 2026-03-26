@@ -83,7 +83,7 @@ Partial Class FrmMenu
         '
         Me.BtnStock.Image = CType(resources.GetObject("BtnStock.Image"), System.Drawing.Image)
         Me.BtnStock.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnStock.Location = New System.Drawing.Point(12, 404)
+        Me.BtnStock.Location = New System.Drawing.Point(12, 308)
         Me.BtnStock.Name = "BtnStock"
         Me.BtnStock.Size = New System.Drawing.Size(123, 68)
         Me.BtnStock.TabIndex = 50

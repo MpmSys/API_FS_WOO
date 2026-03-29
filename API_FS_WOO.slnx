@@ -1,3 +1,6 @@
 <Solution>
   <Project Path="API_FS_WOO/API_FS_WOO.vbproj" Id="52cc129c-b7b5-407f-a790-fc1457f5286e" />
+  <Project Path="SetUpApiWoo/SetUpApiWoo.vdproj" Type="Installer">
+    <Build />
+  </Project>
 </Solution>

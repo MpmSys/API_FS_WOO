@@ -676,6 +676,47 @@ Public Class FrmMenu
 
         Loop Until NumReg = 0
 
+        ' en la Base de datos, buscamos los códigos de producto cuya referencia acaba con guion + número (ejemplo: "REFERENCIA-1")
+        ' Recogemos en dos variables la Referencia base (ejemplo: "REFERENCIA") y el número (ejemplo: "1") 
+        Dim BusquedaCajas As New OleDb.OleDbCommand("SELECT Variante, Referencia, Stock FROM Stock WHERE IdWeb = @IdWeb AND Referencia LIKE '%-%-%' ORDER By Referencia", conn)
+        BusquedaCajas.Parameters.AddWithValue("@IdWeb", WebId)
+        Dim readerCajas As OleDb.OleDbDataReader = BusquedaCajas.ExecuteReader()
+
+        ' Para cada código de producto encontrado y si tenemos stock,
+        ' buscamos en la tabla Stock si existe un código de producto con la misma referencia base pero sin el guion y el número (ejemplo: "REFERENCIA")
+        While readerCajas.Read()
+            Dim Referencia As String = readerCajas("Referencia").ToString()
+            Dim CodRefBase As String = Referencia.Substring(0, Referencia.LastIndexOf("-"))
+            Dim NumRefBase As String = Referencia.Substring(Referencia.LastIndexOf("-") + 1)
+            Dim Stock As Integer = Convert.ToInt32(readerCajas("Stock"))
+            Traza.AppendText($"Analizando caja: Referencia={Referencia}, Stock={Stock}" & vbCrLf)
+            If Stock > 0 Then
+                If IsNumeric(NumRefBase) Then
+                    Traza.AppendText($"Procesando caja: Variante={readerCajas("Variante")}, Referencia={readerCajas("Referencia")}, Stock={readerCajas("Stock")}" & vbCrLf)
+                    ' leemos el producto con referencia base para obtener su stock
+                    Dim BusquedaProducto As New OleDb.OleDbCommand("SELECT Stock FROM Stock WHERE IdWeb = @IdWeb AND Referencia = @Referencia", conn)
+                    BusquedaProducto.Parameters.AddWithValue("@IdWeb", WebId)
+                    BusquedaProducto.Parameters.AddWithValue("@Referencia", CodRefBase)
+                    Dim readerProducto As OleDb.OleDbDataReader = BusquedaProducto.ExecuteReader()
+                    If readerProducto.Read() Then
+                        Dim StockProducto As Integer = Convert.ToInt32(readerProducto("Stock"))
+                        ' si el stock del producto es menor que la mitad del NufRemBase hemos de crear albaranes para reponer stock
+                        If StockProducto < NumRefBase / 2 Then
+                            Dim ValorActualizar As Integer = NumRefBase + StockProducto
+                            Traza.AppendText($"Actualizando stock del producto {CodRefBase} a {ValorActualizar} (anteriormente {StockProducto})" & vbCrLf)
+
+                        End If
+                    End If
+                End If
+            End If
+            Traza.Refresh()
+        End While
+
+
+
+
+
+
         ' Cerramos la conexión a la base de datos
         conn.Close()
 
@@ -1084,7 +1125,7 @@ Public Class FrmMenu
                 ' Creamos con los datos del pedido. Para esto, usamos el endpoint de creación de clientes de la API de FacturaScripts.
                 ' con la rutina CrearApi, que recibe como parámetros la URL del endpoint de creación de clientes,
                 ' el API key de FacturaScripts y el JSON con los datos del cliente a crear.
-                Dim ClienteJson As String = JsonConvert.SerializeObject(New With {
+                Dim ClienteJson = JsonConvert.SerializeObject(New With {
                     .cifnif = CifDniCliente,
                     .nombre = NombreCliente,
                     .email = EmailCliente,
@@ -1297,21 +1338,18 @@ Public Class FrmMenu
             ' total -> totalPedido
             ' totaliva -> totalTaxPedido
 
-            Dim pagada As String = "0"
-            Dim formaPago As String = "Otro"
-            formaPago = "TRANS"
+            Dim pagada As String = "1"
+            Dim formaPago As String = "TRANS"
 
-            If pedido("payment_method").ToString() = "redsys" Then
-                formaPago = "TARJETA"
-                pagada = "1"
-            End If
-
+            If pedido("payment_method").ToString() = "redsys" Then formaPago = "TARJETA"
             If pedido("payment_method").ToString() = "tarjeta" Then formaPago = "TARJTIENDA"
             If pedido("payment_method").ToString() = "pos_cash" Then formaPago = "CONT"
             If pedido("payment_method").ToString() = "cod" Then formaPago = "CONT"
             If pedido("payment_method").ToString() = "efectivo" Then formaPago = "CONT"
             If pedido("payment_method").ToString() = "bacs" Then formaPago = "TRANS"
             If pedido("payment_method").ToString() = "transferencia" Then formaPago = "TRANS"
+
+            'If formaPago = "TRANS" Then pagada = "0"
 
             FechaPedido = datePedido.ToString("yyyy-MM-dd HH:mm:ss")
 
@@ -1345,7 +1383,7 @@ Public Class FrmMenu
                 .lineas = LineasPedidoJson
             })
 
-            LastFecha = datePedido.ToString("yyyy-MM-dd HH:mm:ss")
+            LastFecha = datePedido.ToString("yyyy-MM-dd HH: mm:ss")
             LastFecha = FechaPedido
 
             ' grabamos con la API de FacturaScripts la factura.
@@ -1367,6 +1405,34 @@ Public Class FrmMenu
 
                     ' Comprobar si existe el nodo "doc" que indica éxito
                     If facturaCreada("doc") IsNot Nothing Then
+                        ' Actualizamos es estado de la factura a 11 y editable a 0
+                        Dim idfactura As Long = facturaCreada("doc")("idfactura").ToString()
+                        Dim estadoFactura As String = facturaCreada("doc")("idestado").ToString()
+                        Dim editableFactura As String = facturaCreada("doc")("editable").ToString()
+                        Dim numeroFactura As String = facturaCreada("doc")("numero").ToString()
+
+                        Debug.Print($"Factura creada con ID {idfactura}, estado {estadoFactura}, editable {editableFactura}")
+                        Debug.Print("")
+
+                        ApiVal = API
+
+                        Dim ActualizarJson As String = JsonConvert.SerializeObject(New With {
+                            .idestado = 11,
+                            .editable = 1
+                        })
+
+                        Dim urlActualizar As String = URL.TrimEnd("/"c) & "/api/3/facturaclientes/" & idfactura
+                        Dim resultado As String = ActualizarApi(urlActualizar, ActualizarJson)
+
+                        If Not String.IsNullOrEmpty(resultado) Then
+                            Traza.AppendText($"✓ Factura {numeroFactura} actualizada (editable=0)" & vbCrLf)
+                        Else
+                            Traza.AppendText($"✗ Error al actualizar factura {numeroFactura}" & vbCrLf)
+                        End If
+
+                        Debug.Print($"Resultado al actualizar factura {idfactura}: {resultado}")
+                        Debug.Print("")
+
                         ' Factura creada exitosamente - actualizar estado del pedido
                         Dim fechaActual As DateTime = DateTime.Now
                         Dim updateCmd As New OleDb.OleDbCommand($"UPDATE Pedidos SET Estado = 'FACTURADO', Fecha = #{fechaActual:MM/dd/yyyy HH:mm:ss}# WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
@@ -1430,6 +1496,7 @@ Public Class FrmMenu
                     cmdInsert.ExecuteNonQuery()
                 End If
             End If
+
         Next
 
         ' cierre de la conexión a la base de datos
@@ -1483,4 +1550,133 @@ Public Class FrmMenu
         Return pedido
     End Function
 
+    Private Sub BtnActAutomatico_Click(sender As Object, e As EventArgs) Handles BtnActAutomatico.Click
+
+        BtnActualizar_Click(sender, e)
+        BtnFacturar_Click(sender, e)
+        End
+
+    End Sub
+
+    Private Sub FrmMenu_MouseDoubleClick(sender As Object, e As MouseEventArgs) Handles Me.MouseDoubleClick
+        ' Al hacer doble clic en el formulario solicitamos una contraseña para acceder a los botones que no están disponibles.
+        ' Si la contraseña es correcta, cambiamos el estado enabled de los botones.
+        Dim password As String = InputBox("Introduce la contraseña para acceder a las funciones avanzadas:", "Contraseña")
+        If password = "5712412" Then
+            BtnDescargar.Enabled = Not BtnDescargar.Enabled
+            BtnActualizar.Enabled = Not BtnActualizar.Enabled
+            BtnFacturar.Enabled = Not BtnFacturar.Enabled
+            BtnBoceto.Enabled = Not BtnBoceto.Enabled
+        End If
+    End Sub
+
+    Private Sub BtnBoceto_Click(sender As Object, e As EventArgs) Handles BtnBoceto.Click
+
+        Dim URL As String = WebFs
+        Dim API As String = ClaveFs
+
+        ApiVal = ClaveFs
+
+        ' Buscamos con la API de FacturaScripts las series de facturación disponibles, para esto usamos el endpoint de series
+        ' de la API de FacturaScripts y mostramos el resultado en un MessageBox.
+        Dim BusquedaSeries As String = URL.TrimEnd("/"c) & "/api/3/series"
+        Dim SeriesJson As String = LeerApi(BusquedaSeries, API)
+
+        ' Mostramos las series para poder escoger una serie
+        Dim Series As JArray = JArray.Parse(SeriesJson)
+
+        Traza.Text = "Series" & vbCrLf
+
+        For Each serie As JObject In Series
+            Traza.AppendText($"{serie("codserie")} - {serie("descripcion")}" & vbCrLf)
+        Next
+        Traza.AppendText(vbCrLf & "Introduce la serie que quieres usar para facturar." & vbCrLf)
+        Traza.Refresh()
+
+        ' Recogemos en la variable SerieSeleccionada la serie que queremos usar para facturar,
+        ' por ejemplo "FSC" y mostramos un MessageBox con la serie seleccionada.
+
+        Dim SerieSeleccionada As String = InputBox("Introduce la serie que quieres usar para facturar:", "Serie")
+        SerieSeleccionada = SerieSeleccionada.Trim().ToUpper() ' eliminamos espacios en blanco y convertimos a mayúsculas para evitar errores por formato
+
+        Traza.AppendText($"Serie seleccionada: {SerieSeleccionada}" & vbCrLf)
+
+        ' si la serie seleccionada no está en la lista de series, mostramos un MessageBox de error y salimos del proceso.
+        If Not Series.Any(Function(s) s("codserie").ToString() = SerieSeleccionada) Then
+            MessageBox.Show($"Error: La serie {SerieSeleccionada} no está en la lista de series disponibles.", "Error")
+            Return
+        End If
+
+        ' Inicializar paginación
+        Offset = 0
+        Dim TodosFacturas As New List(Of JObject)()
+
+        Traza.AppendText($"Descargando pedidos de la serie {SerieSeleccionada}..." & vbCrLf)
+        Traza.Refresh()
+
+        Do
+            ' Construir URL con offset
+            Dim BusquedaFacturas As String = URL.TrimEnd("/"c) & $"/api/3/facturaclientes?filter[codserie]={SerieSeleccionada}&sort=numero&offset={Offset}"
+            Dim FacturasJson As String = LeerApi(BusquedaFacturas, API)
+
+            Traza.AppendText($"Lectura {NumReg} desde {Offset} de {TotalReg} disponibles" & vbCrLf)
+            Traza.Refresh()
+
+            ' Incrementar offset
+            Offset += NumReg
+
+            ' Procesar facturas de esta página
+            If NumReg > 0 Then
+                Dim FacturasPagina As JArray = JArray.Parse(FacturasJson)
+                For Each factura As JObject In FacturasPagina
+                    TodosFacturas.Add(factura)
+                Next
+            End If
+
+        Loop Until NumReg = 0
+
+        Traza.AppendText($"Total facturas descargadas: {TodosFacturas.Count}" & vbCrLf)
+        Traza.Refresh()
+
+        NumReg = 0
+        ' Procesar todos los facturas
+        For Each factura As JObject In TodosFacturas
+            NumReg += 1
+            ' Tu lógica de procesamiento aquí
+            Dim numeroFactura As String = factura("numero").ToString()
+            Dim Codigo As String = factura("codigo").ToString()
+            Dim Fecha As String = factura("fecha").ToString()
+            Dim Editable As String = factura("editable").ToString()
+            Dim IdFactura As Double = factura("idfactura")
+
+            Traza.AppendText($"Procesando factura: {numeroFactura}, Código: {Codigo}, Fecha: {Fecha}, Editable: {Editable}" & vbCrLf)
+
+            ' Actualizamos el parametro editable
+            If Editable = "False" Then
+                Dim ActualizarJson As String = JsonConvert.SerializeObject(New With {
+                    .idestado = 10,
+                    .editable = 0
+                })
+                'Dim ActualizarJson As String = JsonConvert.SerializeObject(New With {
+                '    .idestado = 11,
+                '    .editable = 1
+                '})
+
+                Dim urlActualizar As String = URL.TrimEnd("/"c) & "/api/3/facturaclientes/" & IdFactura
+                Dim resultado As String = ActualizarApi(urlActualizar, ActualizarJson)
+
+                If Not String.IsNullOrEmpty(resultado) Then
+                    Traza.AppendText($"✓ Factura {numeroFactura} actualizada (editable=0)" & vbCrLf)
+                Else
+                    Traza.AppendText($"✗ Error al actualizar factura {numeroFactura}" & vbCrLf)
+                End If
+
+                Traza.Refresh()
+
+            End If
+
+            'If NumReg > 11 Then Exit For
+
+        Next
+    End Sub
 End Class

@@ -161,6 +161,24 @@
         gcypXlKWfjmhnW/AAAAAAElFTkSuQmCC
 </value>
   </data>
+  <data name="BtnActAutomatico.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAO
+        vwAADr8BOAVTJAAAAOhJREFUWEfVlAkOwjAMBPN0npafgdziKGwdH3GgYaWRUIm9U1pRSjCPUp4aeH5J
+        +oJaq8pSGau0nCWX6yiDe13Rir0CvQjuV9OXe0sQnHNL4J3josx3pgSWW0glFkOJaDkxI0CIErcKzL50
+        mbMfElsJRMClEZrAbDmRESAOib8WoNnsfBOI3s37GR70nxGc66/vJTDD0kdwB3sIZP8LZmnlKDB6ebLg
+        3r0EUOLbXMq3EKD8QmJYzkEJfHZepDmznLPipcQ5dzkHfwkJLBkRLufQoCZiCfA87g2HF2kyWLqkWEpf
+        IIHnrbwAXUnrzULA9mgAAAAASUVORK5CYII=
+</value>
+  </data>
+  <data name="BtnBoceto.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAO
+        vAAADrwBlbxySQAAAG5JREFUOE+lklEKwDAIQ3t0j9abbXQQcDGK0kA+RH2R0rW0nqalvqYSemYmAUyX
+        PsspYO9dugXgRHgEUMljACePAVcXKI8AGPLD3EsB7A4gnOut3oDTQyp8evjCqHn5B/CpRR0Ukv1ClQz5
+        gcypXlKWfjmhnW/AAAAAAElFTkSuQmCC
+</value>
+  </data>
   <metadata name="$this.TrayHeight" type="System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
     <value>38</value>
   </metadata>

@@ -31,12 +31,14 @@ Partial Class FrmMenu
         Me.BtnStock = New System.Windows.Forms.Button()
         Me.BtnActualizar = New System.Windows.Forms.Button()
         Me.BtnFacturar = New System.Windows.Forms.Button()
+        Me.BtnActAutomatico = New System.Windows.Forms.Button()
+        Me.BtnBoceto = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'Traza
         '
         Me.Traza.Font = New System.Drawing.Font("Courier New", 11.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
-        Me.Traza.Location = New System.Drawing.Point(145, 48)
+        Me.Traza.Location = New System.Drawing.Point(302, 42)
         Me.Traza.Multiline = True
         Me.Traza.Name = "Traza"
         Me.Traza.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
@@ -50,7 +52,7 @@ Partial Class FrmMenu
         Me.BtnSalir.Location = New System.Drawing.Point(12, 12)
         Me.BtnSalir.Name = "BtnSalir"
         Me.BtnSalir.Size = New System.Drawing.Size(123, 68)
-        Me.BtnSalir.TabIndex = 42
+        Me.BtnSalir.TabIndex = 1
         Me.BtnSalir.Text = "Salir"
         Me.BtnSalir.UseVisualStyleBackColor = True
         '
@@ -58,7 +60,7 @@ Partial Class FrmMenu
         '
         Me.TextApi.AutoSize = True
         Me.TextApi.Font = New System.Drawing.Font("Microsoft Sans Serif", 12.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
-        Me.TextApi.Location = New System.Drawing.Point(141, 12)
+        Me.TextApi.Location = New System.Drawing.Point(298, 12)
         Me.TextApi.Name = "TextApi"
         Me.TextApi.Size = New System.Drawing.Size(62, 20)
         Me.TextApi.TabIndex = 45
@@ -70,9 +72,10 @@ Partial Class FrmMenu
         '
         'BtnDescargar
         '
+        Me.BtnDescargar.Enabled = False
         Me.BtnDescargar.Image = CType(resources.GetObject("BtnDescargar.Image"), System.Drawing.Image)
         Me.BtnDescargar.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnDescargar.Location = New System.Drawing.Point(12, 86)
+        Me.BtnDescargar.Location = New System.Drawing.Point(150, 12)
         Me.BtnDescargar.Name = "BtnDescargar"
         Me.BtnDescargar.Size = New System.Drawing.Size(123, 68)
         Me.BtnDescargar.TabIndex = 49
@@ -83,18 +86,19 @@ Partial Class FrmMenu
         '
         Me.BtnStock.Image = CType(resources.GetObject("BtnStock.Image"), System.Drawing.Image)
         Me.BtnStock.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnStock.Location = New System.Drawing.Point(12, 308)
+        Me.BtnStock.Location = New System.Drawing.Point(12, 160)
         Me.BtnStock.Name = "BtnStock"
         Me.BtnStock.Size = New System.Drawing.Size(123, 68)
         Me.BtnStock.TabIndex = 50
-        Me.BtnStock.Text = "Descargar Stock"
+        Me.BtnStock.Text = "Revisar Stock Cajas"
         Me.BtnStock.UseVisualStyleBackColor = True
         '
         'BtnActualizar
         '
+        Me.BtnActualizar.Enabled = False
         Me.BtnActualizar.Image = CType(resources.GetObject("BtnActualizar.Image"), System.Drawing.Image)
         Me.BtnActualizar.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnActualizar.Location = New System.Drawing.Point(12, 160)
+        Me.BtnActualizar.Location = New System.Drawing.Point(150, 86)
         Me.BtnActualizar.Name = "BtnActualizar"
         Me.BtnActualizar.Size = New System.Drawing.Size(123, 68)
         Me.BtnActualizar.TabIndex = 51
@@ -103,20 +107,46 @@ Partial Class FrmMenu
         '
         'BtnFacturar
         '
+        Me.BtnFacturar.Enabled = False
         Me.BtnFacturar.Image = CType(resources.GetObject("BtnFacturar.Image"), System.Drawing.Image)
         Me.BtnFacturar.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnFacturar.Location = New System.Drawing.Point(12, 234)
+        Me.BtnFacturar.Location = New System.Drawing.Point(150, 160)
         Me.BtnFacturar.Name = "BtnFacturar"
         Me.BtnFacturar.Size = New System.Drawing.Size(123, 68)
         Me.BtnFacturar.TabIndex = 52
         Me.BtnFacturar.Text = "Facturar"
         Me.BtnFacturar.UseVisualStyleBackColor = True
         '
+        'BtnActAutomatico
+        '
+        Me.BtnActAutomatico.Image = CType(resources.GetObject("BtnActAutomatico.Image"), System.Drawing.Image)
+        Me.BtnActAutomatico.ImageAlign = System.Drawing.ContentAlignment.TopLeft
+        Me.BtnActAutomatico.Location = New System.Drawing.Point(12, 86)
+        Me.BtnActAutomatico.Name = "BtnActAutomatico"
+        Me.BtnActAutomatico.Size = New System.Drawing.Size(123, 68)
+        Me.BtnActAutomatico.TabIndex = 2
+        Me.BtnActAutomatico.Text = "Actualizar"
+        Me.BtnActAutomatico.UseVisualStyleBackColor = True
+        '
+        'BtnBoceto
+        '
+        Me.BtnBoceto.Enabled = False
+        Me.BtnBoceto.Image = CType(resources.GetObject("BtnBoceto.Image"), System.Drawing.Image)
+        Me.BtnBoceto.ImageAlign = System.Drawing.ContentAlignment.TopLeft
+        Me.BtnBoceto.Location = New System.Drawing.Point(150, 234)
+        Me.BtnBoceto.Name = "BtnBoceto"
+        Me.BtnBoceto.Size = New System.Drawing.Size(123, 68)
+        Me.BtnBoceto.TabIndex = 53
+        Me.BtnBoceto.Text = "Paso a Boceto"
+        Me.BtnBoceto.UseVisualStyleBackColor = True
+        '
         'FrmMenu
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1168, 589)
+        Me.ClientSize = New System.Drawing.Size(1329, 589)
+        Me.Controls.Add(Me.BtnBoceto)
+        Me.Controls.Add(Me.BtnActAutomatico)
         Me.Controls.Add(Me.BtnFacturar)
         Me.Controls.Add(Me.BtnActualizar)
         Me.Controls.Add(Me.BtnStock)
@@ -139,4 +169,6 @@ Partial Class FrmMenu
     Friend WithEvents BtnStock As Button
     Friend WithEvents BtnActualizar As Button
     Friend WithEvents BtnFacturar As Button
+    Friend WithEvents BtnActAutomatico As Button
+    Friend WithEvents BtnBoceto As Button
 End Class

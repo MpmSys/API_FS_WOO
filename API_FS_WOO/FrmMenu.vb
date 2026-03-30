@@ -1579,6 +1579,8 @@ Public Class FrmMenu
             BtnDescargar.Enabled = Not BtnDescargar.Enabled
             BtnFacturar.Enabled = Not BtnFacturar.Enabled
             BtnBoceto.Enabled = Not BtnBoceto.Enabled
+            BtnClientes.Enabled = Not BtnClientes.Enabled
+            BtnPedido.Enabled = Not BtnPedido.Enabled
         End If
     End Sub
 
@@ -1690,5 +1692,17 @@ Public Class FrmMenu
             'If NumReg > 11 Then Exit For
 
         Next
+    End Sub
+
+    Private Sub BtnPedido_Click(sender As Object, e As EventArgs) Handles BtnPedido.Click
+
+        ' Soliitamos el numero de pedido a través de un InputBox, y lo guardamos en la variable idPedido.
+        Dim idPedido As String = InputBox("Introduce el número de pedido que quieres recoger:", "Número de pedido")
+
+        ' Leemos el pedido con la función LeerPedidoWoo, que recibe como parámetro el id del pedido y devuelve un objeto con los datos del pedido.
+        Dim pedido As JObject = LeerPedidoWoo(idPedido)
+        Traza.Text = $"Pedido {idPedido} - Cliente: {pedido("billing")("email").ToString()} - Total: {pedido("total").ToString()}" & vbCrLf
+        Traza.Text &= JsonConvert.SerializeObject(pedido, Formatting.Indented)
+
     End Sub
 End Class

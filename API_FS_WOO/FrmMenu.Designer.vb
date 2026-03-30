@@ -31,7 +31,6 @@ Partial Class FrmMenu
         Me.BtnStock = New System.Windows.Forms.Button()
         Me.BtnActualizar = New System.Windows.Forms.Button()
         Me.BtnFacturar = New System.Windows.Forms.Button()
-        Me.BtnActAutomatico = New System.Windows.Forms.Button()
         Me.BtnBoceto = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
@@ -95,10 +94,9 @@ Partial Class FrmMenu
         '
         'BtnActualizar
         '
-        Me.BtnActualizar.Enabled = False
         Me.BtnActualizar.Image = CType(resources.GetObject("BtnActualizar.Image"), System.Drawing.Image)
         Me.BtnActualizar.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnActualizar.Location = New System.Drawing.Point(150, 86)
+        Me.BtnActualizar.Location = New System.Drawing.Point(12, 86)
         Me.BtnActualizar.Name = "BtnActualizar"
         Me.BtnActualizar.Size = New System.Drawing.Size(123, 68)
         Me.BtnActualizar.TabIndex = 51
@@ -110,30 +108,19 @@ Partial Class FrmMenu
         Me.BtnFacturar.Enabled = False
         Me.BtnFacturar.Image = CType(resources.GetObject("BtnFacturar.Image"), System.Drawing.Image)
         Me.BtnFacturar.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnFacturar.Location = New System.Drawing.Point(150, 160)
+        Me.BtnFacturar.Location = New System.Drawing.Point(150, 86)
         Me.BtnFacturar.Name = "BtnFacturar"
         Me.BtnFacturar.Size = New System.Drawing.Size(123, 68)
         Me.BtnFacturar.TabIndex = 52
         Me.BtnFacturar.Text = "Facturar"
         Me.BtnFacturar.UseVisualStyleBackColor = True
         '
-        'BtnActAutomatico
-        '
-        Me.BtnActAutomatico.Image = CType(resources.GetObject("BtnActAutomatico.Image"), System.Drawing.Image)
-        Me.BtnActAutomatico.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnActAutomatico.Location = New System.Drawing.Point(12, 86)
-        Me.BtnActAutomatico.Name = "BtnActAutomatico"
-        Me.BtnActAutomatico.Size = New System.Drawing.Size(123, 68)
-        Me.BtnActAutomatico.TabIndex = 2
-        Me.BtnActAutomatico.Text = "Actualizar"
-        Me.BtnActAutomatico.UseVisualStyleBackColor = True
-        '
         'BtnBoceto
         '
         Me.BtnBoceto.Enabled = False
         Me.BtnBoceto.Image = CType(resources.GetObject("BtnBoceto.Image"), System.Drawing.Image)
         Me.BtnBoceto.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnBoceto.Location = New System.Drawing.Point(150, 234)
+        Me.BtnBoceto.Location = New System.Drawing.Point(150, 160)
         Me.BtnBoceto.Name = "BtnBoceto"
         Me.BtnBoceto.Size = New System.Drawing.Size(123, 68)
         Me.BtnBoceto.TabIndex = 53
@@ -146,7 +133,6 @@ Partial Class FrmMenu
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1329, 589)
         Me.Controls.Add(Me.BtnBoceto)
-        Me.Controls.Add(Me.BtnActAutomatico)
         Me.Controls.Add(Me.BtnFacturar)
         Me.Controls.Add(Me.BtnActualizar)
         Me.Controls.Add(Me.BtnStock)
@@ -169,6 +155,5 @@ Partial Class FrmMenu
     Friend WithEvents BtnStock As Button
     Friend WithEvents BtnActualizar As Button
     Friend WithEvents BtnFacturar As Button
-    Friend WithEvents BtnActAutomatico As Button
     Friend WithEvents BtnBoceto As Button
 End Class

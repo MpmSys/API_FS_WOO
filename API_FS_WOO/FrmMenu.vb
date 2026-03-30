@@ -380,6 +380,15 @@ Public Class FrmMenu
 
         Traza.Refresh()
 
+        If Environment.GetCommandLineArgs().Length > 1 Then
+            Dim arg As String = Environment.GetCommandLineArgs()(1).ToLower()
+            If arg = "stock" Then
+                BtnStock.PerformClick()
+            ElseIf arg = "actualizar" Then
+                BtnActualizar.PerformClick()
+            End If
+        End If
+
     End Sub
 
     Private Sub BtnSalir_Click(sender As Object, e As EventArgs) Handles BtnSalir.Click
@@ -935,6 +944,8 @@ Public Class FrmMenu
         Traza.Text = OldTraza
         Traza.Text += "Pedidos actualizados correctamente" & vbCrLf
         Traza.Refresh()
+
+        BtnFacturar_Click(sender, e) ' llamamos a la función de facturar para facturar los pedidos que se han actualizado y los nuevos pedidos descargados
 
     End Sub
 
@@ -1505,6 +1516,8 @@ Public Class FrmMenu
         Traza.Text += "Pedidos facturados correctamente" & vbCrLf
         Traza.Refresh()
 
+        End
+
     End Sub
 
     Public Function LeerPedidoWoo(idPedido As String) As Object
@@ -1550,7 +1563,7 @@ Public Class FrmMenu
         Return pedido
     End Function
 
-    Private Sub BtnActAutomatico_Click(sender As Object, e As EventArgs) Handles BtnActAutomatico.Click
+    Private Sub BtnActAutomatico_Click(sender As Object, e As EventArgs)
 
         BtnActualizar_Click(sender, e)
         BtnFacturar_Click(sender, e)
@@ -1564,7 +1577,6 @@ Public Class FrmMenu
         Dim password As String = InputBox("Introduce la contraseña para acceder a las funciones avanzadas:", "Contraseña")
         If password = "5712412" Then
             BtnDescargar.Enabled = Not BtnDescargar.Enabled
-            BtnActualizar.Enabled = Not BtnActualizar.Enabled
             BtnFacturar.Enabled = Not BtnFacturar.Enabled
             BtnBoceto.Enabled = Not BtnBoceto.Enabled
         End If

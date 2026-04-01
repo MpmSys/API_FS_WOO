@@ -381,6 +381,10 @@ Public Class FrmMenu
         Traza.Refresh()
 
         If Environment.GetCommandLineArgs().Length > 1 Then
+            ' si accedemos por argumento de linea minimizamos la ventana y ejecutamos la función correspondiente al argumento pasado. Esto es útil para programar tareas automáticas con el programador de tareas de Windows, donde podemos configurar la tarea para que ejecute el programa con el argumento "stock" o "actualizar" dependiendo de la función que queramos ejecutar automáticamente.
+            Me.WindowState = FormWindowState.Minimized
+
+            ' recogemos el argumento pasado por línea de comandos para ejecutar directamente la función de descarga de stock o actualización de pedidos sin necesidad de pulsar el botón correspondiente en la interfaz.
             Dim arg As String = Environment.GetCommandLineArgs()(1).ToLower()
             If arg = "stock" Then
                 BtnStock.PerformClick()
@@ -750,7 +754,7 @@ Public Class FrmMenu
         Dim ConsumerKey As String = ClaveWoo
         Dim ConsumerSecret As String = PassWoo
 
-        ' Leemos en Woocommerce cual es el último pedido para tener un punto de fin en la actualización de pedidos.
+        ' Leemos en Woocommerce cual es el últimopedido para tener un punto de fin en la actualización de pedidos.
 
         Dim Url As String = "orders?consumer_key=" & ConsumerKey & "&consumer_secret=" & ConsumerSecret & "&per_page=1&page=1&orderby=id&order=desc"
 
@@ -1047,7 +1051,7 @@ Public Class FrmMenu
             ' Construir la URL con el email correctamente codificado
             EmailCliente = pedido("billing")("email").ToString()
             Busqueda = URL.TrimEnd("/"c) & "/api/3/clientes?filter[email]=" & Uri.EscapeDataString(EmailCliente)
-            'Busqueda = URL.TrimEnd("/"c) & "/api/3/clientes?filter[email]=" & EmailCliente
+            'Busqueda = URL.TrimEnd("/"c) & "/api/3/clientes?filter=email=" & EmailCliente
 
             Traza.AppendText("Buscando cliente en FacturaScripts con email: " & EmailCliente & vbCrLf)
             Traza.Refresh()
@@ -1343,7 +1347,7 @@ Public Class FrmMenu
             ' provincia -> ProvinciaPedido
             ' codpostal -> CodigoPostalPedido
             ' codpais -> Pais
-            ' fecha -> datePedido
+            ' fecha -> totalPedido
             ' hora -> datePedido
             ' numero2 -> idPedido
             ' total -> totalPedido
@@ -1633,7 +1637,7 @@ Public Class FrmMenu
             Dim BusquedaFacturas As String = URL.TrimEnd("/"c) & $"/api/3/facturaclientes?filter[codserie]={SerieSeleccionada}&sort=numero&offset={Offset}"
             Dim FacturasJson As String = LeerApi(BusquedaFacturas, API)
 
-            Traza.AppendText($"Lectura {NumReg} desde {Offset} de {TotalReg} disponibles" & vbCrLf)
+            Traza.Text += "Lectura " & NumReg & " desde " & Offset & " de " & TotalReg & " disponibles" & vbCrLf
             Traza.Refresh()
 
             ' Incrementar offset

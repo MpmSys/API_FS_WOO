@@ -643,7 +643,7 @@ Public Class FrmMenu
                     Dim codbarras As String = variante("codbarras").ToString()
                     Dim tipocodbarras As String = variante("tipocodbarras").ToString()
 
-                    ' recogemos el la descripcion de prodotto de la tabla productos con la API de FacturaScripts para guardarla en
+                    ' recogemos el la descripcion de producto de la tabla productos con la API de FacturaScripts para guardarla en
                     ' la tabla Stock y tenerla disponible para futuras consultas sin necesidad de volver a llamar a la API de
                     ' FacturaScripts.
                     Dim BaseUrlProducto As String = WebFs.TrimEnd("/"c) & "/api/3/productos/" & idproducto
@@ -663,18 +663,22 @@ Public Class FrmMenu
                     Dim lecturaJsonStock As JArray = JArray.Parse(responseStock)
                     Dim stockmin As String = ""
                     Dim stockmax As String = ""
+                    Dim codalmacen As String = ""
+
                     If lecturaJsonStock.Count > 0 Then
                         stockmin = lecturaJsonStock(0)("stockmin").ToString()
                         stockmax = lecturaJsonStock(0)("stockmax").ToString()
+                        codalmacen = lecturaJsonStock(0)("codalmacen").ToString()
                     End If
 
                     ' Insertamos el stock de la variante en la tabla Stock de la base de datos
 
                     Dim insertCmd As New OleDb.OleDbCommand(
-                        "INSERT INTO Stock (IdWeb, Variante, Stock, Producto, Referencia, Descripcion, CodBarras, TipoCodBarras, StockMin, StockMax)" &
-                        "VALUES (@IdWeb, @Idvariante, @Stock, @Producto, @Referencia, @Descripcion, @codbarras, @tipocodbarras, @stockmin, @stockmax)", conn)
+                        "INSERT INTO Stock (IdWeb, Variante, CodAlmacen, Stock, Producto, Referencia, Descripcion, CodBarras, TipoCodBarras, StockMin, StockMax)" &
+                        "VALUES (@IdWeb, @Idvariante, @CodAlmacen, @Stock, @Producto, @Referencia, @Descripcion, @codbarras, @tipocodbarras, @stockmin, @stockmax)", conn)
                     insertCmd.Parameters.AddWithValue("@IdWeb", WebId)
                     insertCmd.Parameters.AddWithValue("@Idvariante", idvariante)
+                    insertCmd.Parameters.AddWithValue("@CodAlmacen", codalmacen)
                     insertCmd.Parameters.AddWithValue("@Stock", stock)
                     insertCmd.Parameters.AddWithValue("@Producto", idproducto)
                     insertCmd.Parameters.AddWithValue("@Referencia", referencia)
@@ -691,33 +695,96 @@ Public Class FrmMenu
 
         ' en la Base de datos, buscamos los códigos de producto cuya referencia acaba con guion + número (ejemplo: "REFERENCIA-1")
         ' Recogemos en dos variables la Referencia base (ejemplo: "REFERENCIA") y el número (ejemplo: "1") 
-        Dim BusquedaCajas As New OleDb.OleDbCommand("SELECT Variante, Referencia, Stock FROM Stock WHERE IdWeb = @IdWeb AND Referencia LIKE '%-%-%' ORDER By Referencia", conn)
+        Dim BusquedaCajas As New OleDb.OleDbCommand("SELECT Variante, Referencia, Stock, CodAlmacen FROM Stock WHERE IdWeb = @IdWeb AND Referencia LIKE '%-%-%' ORDER By CodAlmacen,Referencia", conn)
         BusquedaCajas.Parameters.AddWithValue("@IdWeb", WebId)
         Dim readerCajas As OleDb.OleDbDataReader = BusquedaCajas.ExecuteReader()
 
         ' Para cada código de producto encontrado y si tenemos stock,
-        ' buscamos en la tabla Stock si existe un código de producto con la misma referencia base pero sin el guion y el número (ejemplo: "REFERENCIA")
+        ' buscamos en la tabla Stock si existe un código de producto con el mismo almacen y la misma referencia base pero sin el guion y el número
+        ' (ejemplo: "REFERENCIA")
+
         While readerCajas.Read()
             Dim Referencia As String = readerCajas("Referencia").ToString()
+            Dim CodAlmacen As String = readerCajas("CodAlmacen").ToString()
             Dim CodRefBase As String = Referencia.Substring(0, Referencia.LastIndexOf("-"))
             Dim NumRefBase As String = Referencia.Substring(Referencia.LastIndexOf("-") + 1)
             Dim Stock As Integer = Convert.ToInt32(readerCajas("Stock"))
-            Traza.AppendText($"Analizando caja: Referencia={Referencia}, Stock={Stock}" & vbCrLf)
+            'Traza.AppendText($"Analizando caja: Referencia={Referencia}, Stock={Stock}" & vbCrLf)
             If Stock > 0 Then
                 If IsNumeric(NumRefBase) Then
-                    Traza.AppendText($"Procesando caja: Variante={readerCajas("Variante")}, Referencia={readerCajas("Referencia")}, Stock={readerCajas("Stock")}" & vbCrLf)
+                    'Traza.AppendText($"Procesando caja: Variante={readerCajas("Variante")}, Referencia={readerCajas("Referencia")}, Stock={readerCajas("Stock")}" & vbCrLf)
                     ' leemos el producto con referencia base para obtener su stock
-                    Dim BusquedaProducto As New OleDb.OleDbCommand("SELECT Stock FROM Stock WHERE IdWeb = @IdWeb AND Referencia = @Referencia", conn)
+                    Dim BusquedaProducto As New OleDb.OleDbCommand("SELECT Stock FROM Stock WHERE IdWeb = @IdWeb AND CodAlmacen = @CodAlmacen AND Referencia = @Referencia", conn)
                     BusquedaProducto.Parameters.AddWithValue("@IdWeb", WebId)
+                    BusquedaProducto.Parameters.AddWithValue("@CodAlmacen", CodAlmacen)
                     BusquedaProducto.Parameters.AddWithValue("@Referencia", CodRefBase)
                     Dim readerProducto As OleDb.OleDbDataReader = BusquedaProducto.ExecuteReader()
                     If readerProducto.Read() Then
                         Dim StockProducto As Integer = Convert.ToInt32(readerProducto("Stock"))
                         ' si el stock del producto es menor que la mitad del NufRemBase hemos de crear albaranes para reponer stock
                         If StockProducto < NumRefBase / 2 Then
-                            Dim ValorActualizar As Integer = NumRefBase + StockProducto
-                            Traza.AppendText($"Actualizando stock del producto {CodRefBase} a {ValorActualizar} (anteriormente {StockProducto})" & vbCrLf)
+                            Traza.AppendText("-------------------------------" & vbCrLf)
+                            Traza.AppendText($"Caja {Referencia} {CodAlmacen} con stock {Stock} afecta a producto {CodRefBase} con stock {StockProducto} NumRef={NumRefBase}" & vbCrLf)
 
+                            ' Calculamos cuantas cajas completas hay que reponer para llegar al stock necesario (minimo NumRefBase/2) y el resto de unidades sueltas
+
+                            Dim NumCajasAbrir As Integer = 0
+                            Dim StockCajasFinal As Integer = Stock
+                            Dim StockProductoFinal As Integer = StockProducto
+
+                            While StockCajasFinal > 0
+                                NumCajasAbrir += 1
+                                StockCajasFinal -= 1
+                                StockProductoFinal += NumRefBase
+                                If StockProductoFinal > NumRefBase / 2 Then
+                                    Exit While
+                                End If
+                            End While
+
+                            Traza.AppendText($"Creando albarán para reponer stock" & vbCrLf)
+
+                            Traza.AppendText($"Número de cajas completas a abrir: {NumCajasAbrir}" & vbCrLf)
+                            Traza.AppendText($"Stock final de cajas {Referencia}: {StockCajasFinal}" & vbCrLf)
+                            Traza.AppendText($"Stock final del producto {CodRefBase}: {StockProductoFinal}" & vbCrLf)
+
+                            ' Creamos el albarán en la API de FacturaScripts con el producto y la cantidad a reponer.
+                            ' El albarán se creará con el estado "ALBARAN" para que afecte al stock pero no a la facturacion
+                            ' ya que es un movimiento interno.
+
+                            Dim LineasAlbaran As New List(Of Object)()
+
+                            ' Descontamos 1 caja
+                            LineasAlbaran.Add(New With {
+                                .actualizarstock = 1,
+                                .cantidad = -NumCajasAbrir,
+                                .referencia = Referencia
+                             })
+
+                            ' Reponemos el stock del producto
+                            LineasAlbaran.Add(New With {
+                                .actualizarstock = 1,
+                                .cantidad = NumCajasAbrir * NumRefBase,
+                                .referencia = CodRefBase
+                             })
+
+                            ' Creamos el albarán en la API de FacturaScripts crearAlbaranCliente
+                            Dim LineasAlbaranJson As String = JsonConvert.SerializeObject(LineasAlbaran)
+
+                            Dim AlbaranJson As String = JsonConvert.SerializeObject(New With {
+                                .codalmacen = CodAlmacen,
+                                .codproveedor = "Ajuste",
+                                .codtienda = "Tda",
+                                .codcliente = "STOCK",
+                                .lineas = LineasAlbaranJson
+                            })
+
+                            Dim resultadoAlbaran As String = CrearApi(WebFs.TrimEnd("/"c) & "/api/3/albaranes/crearAlbaranCliente", AlbaranJson, ClaveFs)
+
+                            Debug.Print("Resultado albarán: " & resultadoAlbaran)
+
+                            Traza.Refresh()
+
+                            Debug.Print("")
                         End If
                     End If
                 End If
@@ -725,14 +792,9 @@ Public Class FrmMenu
             Traza.Refresh()
         End While
 
-
-
-
-
-
         ' Cerramos la conexión a la base de datos
         conn.Close()
-
+        Traza.AppendText("-------------------------------" & vbCrLf)
         Traza.Text += "Stock descargado correctamente" & vbCrLf
         Traza.Refresh()
 
@@ -1709,4 +1771,71 @@ Public Class FrmMenu
         Traza.Text &= JsonConvert.SerializeObject(pedido, Formatting.Indented)
 
     End Sub
+
+    Private currentLine As Integer = 0
+    Private pageNumber As Integer = 1
+
+    Private Sub BtnPrint_Click(sender As Object, e As EventArgs) Handles BtnPrint.Click
+        Dim printDoc As New Printing.PrintDocument()
+        AddHandler printDoc.PrintPage, AddressOf PrintPageHandler
+
+        currentLine = 0
+        pageNumber = 1
+
+        Try
+            printDoc.Print()
+        Catch ex As Exception
+            MessageBox.Show("Error al imprimir: " & ex.Message, "Error de impresión",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub PrintPageHandler(sender As Object, e As Printing.PrintPageEventArgs)
+        Dim font As New Font("Arial", 10)
+        Dim footerFont As New Font("Arial", 8, FontStyle.Italic)
+        Dim margin As Integer = 40
+        Dim lineHeight As Single = font.GetHeight(e.Graphics)
+        Dim linesPerPage As Integer = CInt((e.MarginBounds.Height - 40) / lineHeight)
+
+        Dim lines() As String = Traza.Text.Split(Environment.NewLine)
+
+        Dim yPos As Single = e.MarginBounds.Top
+        Dim count As Integer = 0
+
+        ' Imprimir líneas
+        While count < linesPerPage AndAlso currentLine < lines.Length
+            e.Graphics.DrawString(lines(currentLine), font, Brushes.Black,
+                                  e.MarginBounds.Left, yPos)
+            count += 1
+            currentLine += 1
+            yPos += lineHeight
+        End While
+
+        ' ---------------------------
+        ' PIE DE PÁGINA
+        ' ---------------------------
+        Dim footerY As Single = e.MarginBounds.Bottom + 20
+        Dim fechaHora As String = DateTime.Now.ToString("dd/MM/yyyy HH:mm")
+        Dim footerText As String = $"Página {pageNumber}    |    Impreso el {fechaHora}"
+
+        ' Línea separadora
+        e.Graphics.DrawLine(Pens.Black, margin, e.MarginBounds.Bottom + 10,
+                            e.PageBounds.Width - margin, e.MarginBounds.Bottom + 10)
+
+        ' Texto del pie
+        e.Graphics.DrawString(footerText, footerFont, Brushes.Gray,
+                              margin, footerY)
+
+        pageNumber += 1
+
+        ' ¿Hay más páginas?
+        If currentLine < lines.Length Then
+            e.HasMorePages = True
+        Else
+            e.HasMorePages = False
+            currentLine = 0
+            pageNumber = 1
+        End If
+    End Sub
+
 End Class

@@ -34,6 +34,7 @@ Partial Class FrmMenu
         Me.BtnBoceto = New System.Windows.Forms.Button()
         Me.BtnClientes = New System.Windows.Forms.Button()
         Me.BtnPedido = New System.Windows.Forms.Button()
+        Me.BtnPrint = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'Traza
@@ -76,7 +77,7 @@ Partial Class FrmMenu
         Me.BtnDescargar.Enabled = False
         Me.BtnDescargar.Image = CType(resources.GetObject("BtnDescargar.Image"), System.Drawing.Image)
         Me.BtnDescargar.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnDescargar.Location = New System.Drawing.Point(12, 234)
+        Me.BtnDescargar.Location = New System.Drawing.Point(152, 12)
         Me.BtnDescargar.Name = "BtnDescargar"
         Me.BtnDescargar.Size = New System.Drawing.Size(123, 68)
         Me.BtnDescargar.TabIndex = 49
@@ -110,7 +111,7 @@ Partial Class FrmMenu
         Me.BtnFacturar.Enabled = False
         Me.BtnFacturar.Image = CType(resources.GetObject("BtnFacturar.Image"), System.Drawing.Image)
         Me.BtnFacturar.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnFacturar.Location = New System.Drawing.Point(12, 308)
+        Me.BtnFacturar.Location = New System.Drawing.Point(152, 86)
         Me.BtnFacturar.Name = "BtnFacturar"
         Me.BtnFacturar.Size = New System.Drawing.Size(123, 68)
         Me.BtnFacturar.TabIndex = 52
@@ -122,7 +123,7 @@ Partial Class FrmMenu
         Me.BtnBoceto.Enabled = False
         Me.BtnBoceto.Image = CType(resources.GetObject("BtnBoceto.Image"), System.Drawing.Image)
         Me.BtnBoceto.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnBoceto.Location = New System.Drawing.Point(12, 382)
+        Me.BtnBoceto.Location = New System.Drawing.Point(152, 160)
         Me.BtnBoceto.Name = "BtnBoceto"
         Me.BtnBoceto.Size = New System.Drawing.Size(123, 68)
         Me.BtnBoceto.TabIndex = 53
@@ -134,7 +135,7 @@ Partial Class FrmMenu
         Me.BtnClientes.Enabled = False
         Me.BtnClientes.Image = CType(resources.GetObject("BtnClientes.Image"), System.Drawing.Image)
         Me.BtnClientes.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnClientes.Location = New System.Drawing.Point(12, 456)
+        Me.BtnClientes.Location = New System.Drawing.Point(152, 234)
         Me.BtnClientes.Name = "BtnClientes"
         Me.BtnClientes.Size = New System.Drawing.Size(123, 68)
         Me.BtnClientes.TabIndex = 54
@@ -146,18 +147,30 @@ Partial Class FrmMenu
         Me.BtnPedido.Enabled = False
         Me.BtnPedido.Image = CType(resources.GetObject("BtnPedido.Image"), System.Drawing.Image)
         Me.BtnPedido.ImageAlign = System.Drawing.ContentAlignment.TopLeft
-        Me.BtnPedido.Location = New System.Drawing.Point(12, 530)
+        Me.BtnPedido.Location = New System.Drawing.Point(152, 308)
         Me.BtnPedido.Name = "BtnPedido"
         Me.BtnPedido.Size = New System.Drawing.Size(123, 68)
         Me.BtnPedido.TabIndex = 55
         Me.BtnPedido.Text = "Leer Pedido"
         Me.BtnPedido.UseVisualStyleBackColor = True
         '
+        'BtnPrint
+        '
+        Me.BtnPrint.Image = CType(resources.GetObject("BtnPrint.Image"), System.Drawing.Image)
+        Me.BtnPrint.ImageAlign = System.Drawing.ContentAlignment.TopLeft
+        Me.BtnPrint.Location = New System.Drawing.Point(12, 234)
+        Me.BtnPrint.Name = "BtnPrint"
+        Me.BtnPrint.Size = New System.Drawing.Size(123, 142)
+        Me.BtnPrint.TabIndex = 56
+        Me.BtnPrint.Text = "Imprimir Textos"
+        Me.BtnPrint.UseVisualStyleBackColor = True
+        '
         'FrmMenu
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1329, 606)
+        Me.Controls.Add(Me.BtnPrint)
         Me.Controls.Add(Me.BtnPedido)
         Me.Controls.Add(Me.BtnClientes)
         Me.Controls.Add(Me.BtnBoceto)
@@ -186,4 +199,5 @@ Partial Class FrmMenu
     Friend WithEvents BtnBoceto As Button
     Friend WithEvents BtnClientes As Button
     Friend WithEvents BtnPedido As Button
+    Friend WithEvents BtnPrint As Button
 End Class

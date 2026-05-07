@@ -40,13 +40,13 @@
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_8AEE01D95336B5D7C4D1819280B97A75"
+        "OwnerKey" = "8:_FB3B0987BCCDC55435294A4C3C01D5C9"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
         {
         "MsmKey" = "8:_UNDEFINED"
-        "OwnerKey" = "8:_FB3B0987BCCDC55435294A4C3C01D5C9"
+        "OwnerKey" = "8:_8AEE01D95336B5D7C4D1819280B97A75"
         "MsmSig" = "8:_UNDEFINED"
         }
     }
@@ -252,15 +252,15 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:SetUpApiWoo"
-        "ProductCode" = "8:{B2A9E901-904A-4FC4-8FF1-4B918EB4277D}"
-        "PackageCode" = "8:{9D802B3D-948D-4576-9E9B-7A9A5FAF3CE6}"
+        "ProductCode" = "8:{0BA234D2-DFC4-480F-9278-196FF61076E0}"
+        "PackageCode" = "8:{8F32DFB3-656C-4289-9A8A-0F1717A51C1F}"
         "UpgradeCode" = "8:{F7B61E8B-E882-472A-AC85-D45AD52163A5}"
         "AspNetVersion" = "8:"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:TRUE"
         "InstallAllUsers" = "11:FALSE"
-        "ProductVersion" = "8:2.0.2"
+        "ProductVersion" = "8:2.0.3"
         "Manufacturer" = "8:MpmSystems"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:"

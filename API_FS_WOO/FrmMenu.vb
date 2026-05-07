@@ -1360,6 +1360,11 @@ Public Class FrmMenu
                 Dim descripcion As String = shippingLine("method_title").ToString()
                 Dim pvpunitario As String = shippingLine("total").ToString()
 
+                ' si en descripcion contiene &quot; o &#039; lo reemplazamos por un espacio
+                descripcion = descripcion.Replace("&quot;", " ").Replace("&#039;", " ")
+                ' si en descripcion contiene &amp; o & lo reemplazamos por _and_
+                descripcion = descripcion.Replace("&amp;", "_and_").Replace("&", "_and_")
+
                 LineasPedido.Add(New With {
                     .referencia = "ENVIO",
                     .cantidad = 1,
@@ -1376,6 +1381,11 @@ Public Class FrmMenu
                 Dim pvpunitario As String = fee("amount").ToString()
                 Dim CodFee As String = "SEGURO"
                 If descripcion.ToUpper().Contains("RECARGO") Then CodFee = "RECARGO"
+
+                ' si en descripcion contiene &quot; o &#039; lo reemplazamos por un espacio
+                descripcion = descripcion.Replace("&quot;", " ").Replace("&#039;", " ")
+                ' si en descripcion contiene &amp; o & lo reemplazamos por _and_
+                descripcion = descripcion.Replace("&amp;", "_and_").Replace("&", "_and_")
 
                 LineasPedido.Add(New With {
                     .referencia = CodFee,

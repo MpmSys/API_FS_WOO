@@ -778,7 +778,7 @@ Public Class FrmMenu
                                 .lineas = LineasAlbaranJson
                             })
 
-                            Dim resultadoAlbaran As String = CrearApi(WebFs.TrimEnd("/"c) & "/api/3/albaranes/crearAlbaranCliente", AlbaranJson, ClaveFs)
+                            Dim resultadoAlbaran As String = CrearApi(WebFs.TrimEnd("/"c) & "/api/3/crearAlbaranProveedor", AlbaranJson, ClaveFs)
 
                             Debug.Print("Resultado albarán: " & resultadoAlbaran)
 

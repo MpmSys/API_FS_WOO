@@ -388,15 +388,17 @@ Public Class FrmMenu
             Dim arg As String = Environment.GetCommandLineArgs()(1).ToLower()
             If arg = "stock" Then
                 BtnStock.PerformClick()
+                BtnSalir.PerformClick()
             ElseIf arg = "actualizar" Then
                 BtnActualizar.PerformClick()
+                BtnSalir.PerformClick()
             End If
         End If
 
     End Sub
 
     Private Sub BtnSalir_Click(sender As Object, e As EventArgs) Handles BtnSalir.Click
-        End
+        Me.Close()
     End Sub
 
     Private Sub ProcesarPedido(pedido As Object, conn As OleDb.OleDbConnection)
@@ -1362,6 +1364,8 @@ Public Class FrmMenu
 
                 ' si en descripcion contiene &quot; o &#039; lo reemplazamos por un espacio
                 descripcion = descripcion.Replace("&quot;", " ").Replace("&#039;", " ")
+                ' si en descripcion contiene &lt; o &gt; lo reemplazamos por un espacio
+                descripcion = descripcion.Replace("&lt;", " ").Replace("&gt;", " ")
                 ' si en descripcion contiene &amp; o & lo reemplazamos por _and_
                 descripcion = descripcion.Replace("&amp;", "_and_").Replace("&", "_and_")
 
@@ -1384,6 +1388,8 @@ Public Class FrmMenu
 
                 ' si en descripcion contiene &quot; o &#039; lo reemplazamos por un espacio
                 descripcion = descripcion.Replace("&quot;", " ").Replace("&#039;", " ")
+                ' si en descripcion contiene &lt; o &gt; lo reemplazamos por un espacio
+                descripcion = descripcion.Replace("&lt;", " ").Replace("&gt;", " ")
                 ' si en descripcion contiene &amp; o & lo reemplazamos por _and_
                 descripcion = descripcion.Replace("&amp;", "_and_").Replace("&", "_and_")
 
@@ -1403,8 +1409,9 @@ Public Class FrmMenu
             ' Transformamos unas cadenas para evitar errores
             ' \\&#039; -> .
             ' &amp; -> _and_
+            LineasPedidoJson = LineasPedidoJson.Replace("&lt;", " ").Replace("&gt;", " ").Replace("\t", "_")
             LineasPedidoJson = LineasPedidoJson.Replace("\\&#039;", ".").Replace("&amp;", "_and_")
-            LineasPedidoJson = LineasPedidoJson.Replace("&#039;", ".").Replace("\t", "_")
+            LineasPedidoJson = LineasPedidoJson.Replace("&quot;", " ")
 
             Debug.Print("Líneas del pedido " & idPedido & ": " & LineasPedidoJson)
             Traza.AppendText($"Líneas procesadas: {LineasPedido.Count}" & vbCrLf)
@@ -1591,8 +1598,6 @@ Public Class FrmMenu
 
         Traza.Text += "Pedidos facturados correctamente" & vbCrLf
         Traza.Refresh()
-
-        End
 
     End Sub
 

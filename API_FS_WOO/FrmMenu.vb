@@ -398,7 +398,7 @@ Public Class FrmMenu
     End Sub
 
     Private Sub BtnSalir_Click(sender As Object, e As EventArgs) Handles BtnSalir.Click
-        Me.Close()
+        End
     End Sub
 
     Private Sub ProcesarPedido(pedido As Object, conn As OleDb.OleDbConnection)

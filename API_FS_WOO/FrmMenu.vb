@@ -386,13 +386,11 @@ Public Class FrmMenu
 
             ' recogemos el argumento pasado por línea de comandos para ejecutar directamente la función de descarga de stock o actualización de pedidos sin necesidad de pulsar el botón correspondiente en la interfaz.
             Dim arg As String = Environment.GetCommandLineArgs()(1).ToLower()
-            If arg = "stock" Then
-                BtnStock.PerformClick()
-                BtnSalir.PerformClick()
-            ElseIf arg = "actualizar" Then
-                BtnActualizar.PerformClick()
-                BtnSalir.PerformClick()
-            End If
+
+            If arg = "stock" Then BtnStock.PerformClick()
+            If arg = "actualizar" Then BtnActualizar.PerformClick()
+
+            BtnSalir.PerformClick()
         End If
 
     End Sub

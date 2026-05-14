@@ -390,7 +390,6 @@ Public Class FrmMenu
             If arg = "stock" Then BtnStock.PerformClick()
             If arg = "actualizar" Then BtnActualizar.PerformClick()
 
-            BtnSalir.PerformClick()
         End If
 
     End Sub
@@ -797,6 +796,10 @@ Public Class FrmMenu
         Traza.AppendText("-------------------------------" & vbCrLf)
         Traza.Text += "Stock descargado correctamente" & vbCrLf
         Traza.Refresh()
+
+        If Environment.GetCommandLineArgs().Length > 1 Then
+            End
+        End If
 
     End Sub
 
@@ -1596,6 +1599,14 @@ Public Class FrmMenu
 
         Traza.Text += "Pedidos facturados correctamente" & vbCrLf
         Traza.Refresh()
+
+        ' Si ha entrado con parametros, cerramos la aplicación al finalizar el proceso de facturación,
+        ' para que pueda ser llamada desde un script externo y no quede abierta esperando a que el usuario
+        ' la cierre manualmente.
+
+        If Environment.GetCommandLineArgs().Length > 1 Then
+            End
+        End If
 
     End Sub
 

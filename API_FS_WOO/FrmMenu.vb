@@ -38,6 +38,11 @@ Public Class FrmMenu
 
     Dim OldTraza As String
 
+    ' Variables para modo silencioso con argumentos de línea de comandos
+    Public Shared ArgumentosLineaComandos As System.Collections.ObjectModel.ReadOnlyCollection(Of String)
+    Private ModoSilencioso As Boolean = False
+    Private LogSilencioso As New System.Text.StringBuilder()
+
     Public Class CRUDMethod
         Public Shared Create As String = "POST"
         Public Shared Read As String = "GET"
@@ -380,18 +385,134 @@ Public Class FrmMenu
 
         Traza.Refresh()
 
-        If Environment.GetCommandLineArgs().Length > 1 Then
-            ' si accedemos por argumento de linea minimizamos la ventana y ejecutamos la función correspondiente al argumento pasado. Esto es útil para programar tareas automáticas con el programador de tareas de Windows, donde podemos configurar la tarea para que ejecute el programa con el argumento "stock" o "actualizar" dependiendo de la función que queramos ejecutar automáticamente.
-            Me.WindowState = FormWindowState.Minimized
+        ' ══════════════════════════════════════════════════════════════════════════════
+        ' MODO SILENCIOSO CON ARGUMENTOS DE LÍNEA DE COMANDOS
+        ' ══════════════════════════════════════════════════════════════════════════════
+        ' Uso: API_FS_WOO.exe [comando] [opciones]
+        ' 
+        ' Comandos disponibles:
+        '   /silent /stock        - Descargar stock sin mostrar ventana
+        '   /silent /actualizar   - Actualizar pedidos sin mostrar ventana
+        '   /silent /facturar     - Facturar pedidos sin mostrar ventana
+        '   /minimized /stock     - Descargar stock minimizado
+        '   /minimized /actualizar - Actualizar pedidos minimizado
+        '   /minimized /facturar   - Facturar pedidos minimizado
+        '   /log:"ruta"           - Guardar log en archivo
+        '
+        ' Ejemplos:
+        '   API_FS_WOO.exe /silent /stock
+        '   API_FS_WOO.exe /silent /actualizar /log:"C:\logs\pedidos.txt"
+        '   API_FS_WOO.exe /minimized /facturar
+        ' ══════════════════════════════════════════════════════════════════════════════
 
-            ' recogemos el argumento pasado por línea de comandos para ejecutar directamente la función de descarga de stock o actualización de pedidos sin necesidad de pulsar el botón correspondiente en la interfaz.
-            Dim arg As String = Environment.GetCommandLineArgs()(1).ToLower()
+        If ArgumentosLineaComandos IsNot Nothing AndAlso ArgumentosLineaComandos.Count > 0 Then
 
-            If arg = "stock" Then BtnStock.PerformClick()
-            If arg = "actualizar" Then BtnActualizar.PerformClick()
+            Dim silenteMode As Boolean = False
+            Dim minimizedMode As Boolean = False
+            Dim comando As String = ""
+            Dim logFile As String = ""
 
+            ' Procesar argumentos
+            For Each arg As String In ArgumentosLineaComandos
+                Dim argLower As String = arg.ToLower()
+
+                If argLower = "/silent" Or argLower = "-silent" Or argLower = "--silent" Then
+                    silenteMode = True
+                    ModoSilencioso = True
+                ElseIf argLower = "/minimized" Or argLower = "-minimized" Or argLower = "--minimized" Then
+                    minimizedMode = True
+                ElseIf argLower = "/stock" Or argLower = "-stock" Or argLower = "--stock" Or argLower = "stock" Then
+                    comando = "stock"
+                ElseIf argLower = "/actualizar" Or argLower = "-actualizar" Or argLower = "--actualizar" Or argLower = "actualizar" Then
+                    comando = "actualizar"
+                ElseIf argLower = "/facturar" Or argLower = "-facturar" Or argLower = "--facturar" Or argLower = "facturar" Then
+                    comando = "facturar"
+                ElseIf argLower.StartsWith("/log:") Or argLower.StartsWith("-log:") Or argLower.StartsWith("--log:") Then
+                    logFile = arg.Substring(arg.IndexOf(":"c) + 1).Trim(""""c)
+                End If
+            Next
+
+            ' Aplicar modo de visualización
+            If silenteMode Then
+                ' Modo silencioso: no mostrar ventana
+                Me.WindowState = FormWindowState.Minimized
+                Me.ShowInTaskbar = False
+                Me.Opacity = 0
+                Me.Visible = False
+
+                EscribirLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Iniciando en modo silencioso...")
+                EscribirLog($"Comando: {comando}")
+                EscribirLog($"Base de datos: {BaseDatos}")
+            ElseIf minimizedMode Then
+                ' Modo minimizado: mostrar en barra de tareas pero minimizado
+                Me.WindowState = FormWindowState.Minimized
+                EscribirLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Iniciando en modo minimizado...")
+            End If
+
+            ' Ejecutar comando
+            If Not String.IsNullOrEmpty(comando) Then
+                Select Case comando
+                    Case "stock"
+                        EscribirLog("Ejecutando: Descarga de stock...")
+                        BtnStock.PerformClick()
+
+                    Case "actualizar"
+                        EscribirLog("Ejecutando: Actualización de pedidos...")
+                        BtnActualizar.PerformClick()
+
+                    Case "facturar"
+                        EscribirLog("Ejecutando: Facturación de pedidos...")
+                        BtnFacturar.PerformClick()
+                End Select
+
+                ' Guardar log si se especificó
+                If Not String.IsNullOrEmpty(logFile) Then
+                    Try
+                        Dim logDir As String = IO.Path.GetDirectoryName(logFile)
+                        If Not IO.Directory.Exists(logDir) Then
+                            IO.Directory.CreateDirectory(logDir)
+                        End If
+                        IO.File.WriteAllText(logFile, LogSilencioso.ToString())
+                        EscribirLog($"Log guardado en: {logFile}")
+                    Catch ex As Exception
+                        Debug.Print($"Error al guardar log: {ex.Message}")
+                    End Try
+                End If
+
+                ' Cerrar aplicación si está en modo silencioso
+                If silenteMode Then
+                    EscribirLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Finalizando aplicación en modo silencioso...")
+
+                    ' Dar tiempo para completar operaciones asíncronas
+                    System.Threading.Thread.Sleep(2000)
+                    Application.Exit()
+                End If
+            Else
+                If silenteMode Or minimizedMode Then
+                    EscribirLog("ADVERTENCIA: No se especificó ningún comando.")
+                    EscribirLog("Comandos disponibles: /stock, /actualizar, /facturar")
+                End If
+            End If
         End If
 
+    End Sub
+
+    ''' <summary>
+    ''' Escribe en el log silencioso y en Debug
+    ''' </summary>
+    Private Sub EscribirLog(mensaje As String)
+        LogSilencioso.AppendLine(mensaje)
+        Debug.Print(mensaje)
+
+        ' Si no estamos en modo silencioso, también escribir en Traza
+        If Not ModoSilencioso AndAlso Traza IsNot Nothing Then
+            Try
+                Traza.AppendText(mensaje & vbCrLf)
+                Traza.Refresh()
+            Catch
+                ' Ignorar errores si el control no está disponible
+            End Try
+        End If
     End Sub
 
     Private Sub BtnSalir_Click(sender As Object, e As EventArgs) Handles BtnSalir.Click

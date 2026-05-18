@@ -112,6 +112,9 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Ejecutar-API.ps1" />
+    <None Include="Ejecutar_Tareas.bat" />
+    <None Include="MODO_SILENCIOSO.md" />
     <None Include="My Project\Application.myapp">
       <Generator>MyApplicationCodeGenerator</Generator>
       <LastGenOutput>Application.Designer.vb</LastGenOutput>
@@ -123,6 +126,7 @@
     </None>
     <None Include="App.config" />
     <None Include="packages.config" />
+    <None Include="README_MODO_SILENCIOSO.md" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
 </Project>

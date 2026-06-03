@@ -776,7 +776,7 @@ Public Class FrmMenu
                     ' recogemos los valores stockmin y stockmax de la tabla stocks de la API de FacturaScripts para guardarlos
                     ' en la tabla Stock y tenerlos disponibles para futuras consultas sin necesidad de volver a llamar a la API de
                     ' FacturaScripts.
-                    Dim BaseUrlStock As String = WebFs.TrimEnd("/"c) & "/api/3/stocks?referencia=" & referencia
+                    Dim BaseUrlStock As String = WebFs.TrimEnd("/"c) & "/api/3/stocks?filter[referencia]=" & referencia
                     NumRegVariante = NumReg
                     Dim responseStock As String = LeerApi(BaseUrlStock)
                     NumReg = NumRegVariante
@@ -786,28 +786,53 @@ Public Class FrmMenu
                     Dim codalmacen As String = ""
 
                     If lecturaJsonStock.Count > 0 Then
-                        stockmin = lecturaJsonStock(0)("stockmin").ToString()
-                        stockmax = lecturaJsonStock(0)("stockmax").ToString()
-                        codalmacen = lecturaJsonStock(0)("codalmacen").ToString()
+                        ' Para cada variante puede haber varios registros de stock si el producto tiene stock en varios almacenes.
+                        ' En ese caso, insertamos un registro en la tabla Stock por cada almacen con su stock correspondiente.
+
+                        For Each registroStock In lecturaJsonStock
+                            stockmin = registroStock("stockmin").ToString()
+                            stockmax = registroStock("stockmax").ToString()
+                            stock = registroStock("disponible").ToString()
+                            codalmacen = registroStock("codalmacen").ToString()
+                            Debug.Print(referencia)
+                            Debug.Print($"Var {idvariante} - Prod {idproducto} - Alm {codalmacen}: Stock={stock}, Min={stockmin}, Max={stockmax}")
+
+                            ' Insertamos el stock de la variante en la tabla Stock de la base de datos
+                            Dim insertCmd As New OleDb.OleDbCommand(
+                                "INSERT INTO Stock (IdWeb, Variante, CodAlmacen, Stock, Producto, Referencia, Descripcion, CodBarras, TipoCodBarras, StockMin, StockMax)" &
+                                "VALUES (@IdWeb, @Idvariante, @CodAlmacen, @Stock, @Producto, @Referencia, @Descripcion, @codbarras, @tipocodbarras, @stockmin, @stockmax)", conn)
+                            insertCmd.Parameters.AddWithValue("@IdWeb", WebId)
+                            insertCmd.Parameters.AddWithValue("@Idvariante", idvariante)
+                            insertCmd.Parameters.AddWithValue("@CodAlmacen", codalmacen)
+                            insertCmd.Parameters.AddWithValue("@Stock", stock)
+                            insertCmd.Parameters.AddWithValue("@Producto", idproducto)
+                            insertCmd.Parameters.AddWithValue("@Referencia", referencia)
+                            insertCmd.Parameters.AddWithValue("@Descripcion", descripcion)
+                            insertCmd.Parameters.AddWithValue("@codbarras", codbarras)
+                            insertCmd.Parameters.AddWithValue("@tipcodbarras", tipocodbarras)
+                            insertCmd.Parameters.AddWithValue("@stockmin", stockmin)
+                            insertCmd.Parameters.AddWithValue("@stockmax", stockmax)
+                            insertCmd.ExecuteNonQuery()
+                        Next
+                    Else
+                        ' Insertamos el stock de la variante en la tabla Stock de la base de datos
+                        'Dim insertCmd As New OleDb.OleDbCommand(
+                        '    "INSERT INTO Stock (IdWeb, Variante, CodAlmacen, Stock, Producto, Referencia, Descripcion, CodBarras, TipoCodBarras, StockMin, StockMax)" &
+                        '    "VALUES (@IdWeb, @Idvariante, @CodAlmacen, @Stock, @Producto, @Referencia, @Descripcion, @codbarras, @tipocodbarras, @stockmin, @stockmax)", conn)
+                        'insertCmd.Parameters.AddWithValue("@IdWeb", WebId)
+                        'insertCmd.Parameters.AddWithValue("@Idvariante", idvariante)
+                        'insertCmd.Parameters.AddWithValue("@CodAlmacen", codalmacen)
+                        'insertCmd.Parameters.AddWithValue("@Stock", stock)
+                        'insertCmd.Parameters.AddWithValue("@Producto", idproducto)
+                        'insertCmd.Parameters.AddWithValue("@Referencia", referencia)
+                        'insertCmd.Parameters.AddWithValue("@Descripcion", descripcion)
+                        'insertCmd.Parameters.AddWithValue("@codbarras", codbarras)
+                        'insertCmd.Parameters.AddWithValue("@tipocodbarras", tipocodbarras)
+                        'insertCmd.Parameters.AddWithValue("@stockmin", stockmin)
+                        'insertCmd.Parameters.AddWithValue("@stockmax", stockmax)
+                        'insertCmd.ExecuteNonQuery()
                     End If
 
-                    ' Insertamos el stock de la variante en la tabla Stock de la base de datos
-
-                    Dim insertCmd As New OleDb.OleDbCommand(
-                        "INSERT INTO Stock (IdWeb, Variante, CodAlmacen, Stock, Producto, Referencia, Descripcion, CodBarras, TipoCodBarras, StockMin, StockMax)" &
-                        "VALUES (@IdWeb, @Idvariante, @CodAlmacen, @Stock, @Producto, @Referencia, @Descripcion, @codbarras, @tipocodbarras, @stockmin, @stockmax)", conn)
-                    insertCmd.Parameters.AddWithValue("@IdWeb", WebId)
-                    insertCmd.Parameters.AddWithValue("@Idvariante", idvariante)
-                    insertCmd.Parameters.AddWithValue("@CodAlmacen", codalmacen)
-                    insertCmd.Parameters.AddWithValue("@Stock", stock)
-                    insertCmd.Parameters.AddWithValue("@Producto", idproducto)
-                    insertCmd.Parameters.AddWithValue("@Referencia", referencia)
-                    insertCmd.Parameters.AddWithValue("@Descripcion", descripcion)
-                    insertCmd.Parameters.AddWithValue("@codbarras", codbarras)
-                    insertCmd.Parameters.AddWithValue("@tipcodbarras", tipocodbarras)
-                    insertCmd.Parameters.AddWithValue("@stockmin", stockmin)
-                    insertCmd.Parameters.AddWithValue("@stockmax", stockmax)
-                    insertCmd.ExecuteNonQuery()
                 Next
             End If
 
@@ -1882,7 +1907,7 @@ Public Class FrmMenu
                     .idestado = 10,
                     .editable = 0
                 })
-                'Dim ActualizarJson As String = JsonConvert.SerializeObject(New With {
+                'Dim ActualizarJson As String = JsonConvert.SerialFizeObject(New With {
                 '    .idestado = 11,
                 '    .editable = 1
                 '})

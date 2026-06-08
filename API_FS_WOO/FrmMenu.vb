@@ -38,10 +38,7 @@ Public Class FrmMenu
 
     Dim OldTraza As String
 
-    ' Variables para modo silencioso con argumentos de línea de comandos
-    Public Shared ArgumentosLineaComandos As System.Collections.ObjectModel.ReadOnlyCollection(Of String)
-    Private ModoSilencioso As Boolean = False
-    Private LogSilencioso As New System.Text.StringBuilder()
+    Dim FicheroLog As String = "C:\Logs\LogApi_" & Date.Now.ToString("yyyyMMdd") & ".txt"
 
     Public Class CRUDMethod
         Public Shared Create As String = "POST"
@@ -320,6 +317,8 @@ Public Class FrmMenu
         Text = My.Application.Info.Title & " - " & My.Application.Info.Version.ToString & " " &
             My.Computer.Name & " " & My.User.Name
         '
+        EscribirLog(Text)
+        '
         ' Localizacion del directorio BaseDatos
         '
         Fichero = My.Computer.FileSystem.SpecialDirectories.MyDocuments & "\MpmSystems\BaseApi.cfg"
@@ -385,133 +384,29 @@ Public Class FrmMenu
 
         Traza.Refresh()
 
-        ' ══════════════════════════════════════════════════════════════════════════════
-        ' MODO SILENCIOSO CON ARGUMENTOS DE LÍNEA DE COMANDOS
-        ' ══════════════════════════════════════════════════════════════════════════════
-        ' Uso: API_FS_WOO.exe [comando] [opciones]
-        ' 
-        ' Comandos disponibles:
-        '   /silent /stock        - Descargar stock sin mostrar ventana
-        '   /silent /actualizar   - Actualizar pedidos sin mostrar ventana
-        '   /silent /facturar     - Facturar pedidos sin mostrar ventana
-        '   /minimized /stock     - Descargar stock minimizado
-        '   /minimized /actualizar - Actualizar pedidos minimizado
-        '   /minimized /facturar   - Facturar pedidos minimizado
-        '   /log:"ruta"           - Guardar log en archivo
-        '
-        ' Ejemplos:
-        '   API_FS_WOO.exe /silent /stock
-        '   API_FS_WOO.exe /silent /actualizar /log:"C:\logs\pedidos.txt"
-        '   API_FS_WOO.exe /minimized /facturar
-        ' ══════════════════════════════════════════════════════════════════════════════
+        ' Aplicar modo de visualización
+        ' Modo silencioso: no mostrar ventana
+        'Me.WindowState = FormWindowState.Minimized
+        '        Me.ShowInTaskbar = False
+        '        Me.Opacity = 0
+        '        Me.Visible = False
 
-        If ArgumentosLineaComandos IsNot Nothing AndAlso ArgumentosLineaComandos.Count > 0 Then
+        ' Ejecutar comando
+        If Environment.GetCommandLineArgs.Length > 1 Then
 
-            Dim silenteMode As Boolean = False
-            Dim minimizedMode As Boolean = False
-            Dim comando As String = ""
-            Dim logFile As String = ""
+            EscribirLog($"Argumento recibido: {Environment.GetCommandLineArgs(1)}")
 
-            ' Procesar argumentos
-            For Each arg As String In ArgumentosLineaComandos
-                Dim argLower As String = arg.ToLower()
-
-                If argLower = "/silent" Or argLower = "-silent" Or argLower = "--silent" Then
-                    silenteMode = True
-                    ModoSilencioso = True
-                ElseIf argLower = "/minimized" Or argLower = "-minimized" Or argLower = "--minimized" Then
-                    minimizedMode = True
-                ElseIf argLower = "/stock" Or argLower = "-stock" Or argLower = "--stock" Or argLower = "stock" Then
-                    comando = "stock"
-                ElseIf argLower = "/actualizar" Or argLower = "-actualizar" Or argLower = "--actualizar" Or argLower = "actualizar" Then
-                    comando = "actualizar"
-                ElseIf argLower = "/facturar" Or argLower = "-facturar" Or argLower = "--facturar" Or argLower = "facturar" Then
-                    comando = "facturar"
-                ElseIf argLower.StartsWith("/log:") Or argLower.StartsWith("-log:") Or argLower.StartsWith("--log:") Then
-                    logFile = arg.Substring(arg.IndexOf(":"c) + 1).Trim(""""c)
-                End If
-            Next
-
-            ' Aplicar modo de visualización
-            If silenteMode Then
-                ' Modo silencioso: no mostrar ventana
-                Me.WindowState = FormWindowState.Minimized
-                Me.ShowInTaskbar = False
-                Me.Opacity = 0
-                Me.Visible = False
-
-                EscribirLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Iniciando en modo silencioso...")
-                EscribirLog($"Comando: {comando}")
-                EscribirLog($"Base de datos: {BaseDatos}")
-            ElseIf minimizedMode Then
-                ' Modo minimizado: mostrar en barra de tareas pero minimizado
-                Me.WindowState = FormWindowState.Minimized
-                EscribirLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Iniciando en modo minimizado...")
+            If UCase(Trim(Environment.GetCommandLineArgs(1))) = "ACTUALIZAR" Then
+                BtnActualizar.PerformClick()
+                BtnSalir.PerformClick()
             End If
 
-            ' Ejecutar comando
-            If Not String.IsNullOrEmpty(comando) Then
-                Select Case comando
-                    Case "stock"
-                        EscribirLog("Ejecutando: Descarga de stock...")
-                        BtnStock.PerformClick()
-
-                    Case "actualizar"
-                        EscribirLog("Ejecutando: Actualización de pedidos...")
-                        BtnActualizar.PerformClick()
-
-                    Case "facturar"
-                        EscribirLog("Ejecutando: Facturación de pedidos...")
-                        BtnFacturar.PerformClick()
-                End Select
-
-                ' Guardar log si se especificó
-                If Not String.IsNullOrEmpty(logFile) Then
-                    Try
-                        Dim logDir As String = IO.Path.GetDirectoryName(logFile)
-                        If Not IO.Directory.Exists(logDir) Then
-                            IO.Directory.CreateDirectory(logDir)
-                        End If
-                        IO.File.WriteAllText(logFile, LogSilencioso.ToString())
-                        EscribirLog($"Log guardado en: {logFile}")
-                    Catch ex As Exception
-                        Debug.Print($"Error al guardar log: {ex.Message}")
-                    End Try
-                End If
-
-                ' Cerrar aplicación si está en modo silencioso
-                If silenteMode Then
-                    EscribirLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Finalizando aplicación en modo silencioso...")
-
-                    ' Dar tiempo para completar operaciones asíncronas
-                    System.Threading.Thread.Sleep(2000)
-                    Application.Exit()
-                End If
-            Else
-                If silenteMode Or minimizedMode Then
-                    EscribirLog("ADVERTENCIA: No se especificó ningún comando.")
-                    EscribirLog("Comandos disponibles: /stock, /actualizar, /facturar")
-                End If
+            If UCase(Trim(Environment.GetCommandLineArgs(1))) = "STOCK" Then
+                BtnStock.PerformClick()
+                BtnSalir.PerformClick()
             End If
-        End If
-
-    End Sub
-
-    ''' <summary>
-    ''' Escribe en el log silencioso y en Debug
-    ''' </summary>
-    Private Sub EscribirLog(mensaje As String)
-        LogSilencioso.AppendLine(mensaje)
-        Debug.Print(mensaje)
-
-        ' Si no estamos en modo silencioso, también escribir en Traza
-        If Not ModoSilencioso AndAlso Traza IsNot Nothing Then
-            Try
-                Traza.AppendText(mensaje & vbCrLf)
-                Traza.Refresh()
-            Catch
-                ' Ignorar errores si el control no está disponible
-            End Try
+        Else
+            EscribirLog("No se recibieron argumentos. Iniciando en modo interactivo.")
         End If
     End Sub
 
@@ -725,6 +620,7 @@ Public Class FrmMenu
 
         Traza.Text = "Descargando stock de FacturaScripts..." & vbCrLf
         Traza.Refresh()
+        EscribirLog("Iniciando descarga de stock de FacturaScripts...")
 
         ApiVal = ClaveFs
 
@@ -749,6 +645,7 @@ Public Class FrmMenu
             Dim response As String = LeerApi(BaseUrl)
             Traza.Text += "Lectura " & NumReg & " desde " & Offset & " de " & TotalReg & " disponibles" & vbCrLf
             Traza.Refresh()
+            EscribirLog($"Lectura {NumReg} desde {Offset} de {TotalReg} disponibles")
 
             Offset += NumReg
 
@@ -855,6 +752,7 @@ Public Class FrmMenu
             Dim NumRefBase As String = Referencia.Substring(Referencia.LastIndexOf("-") + 1)
             Dim Stock As Integer = Convert.ToInt32(readerCajas("Stock"))
             'Traza.AppendText($"Analizando caja: Referencia={Referencia}, Stock={Stock}" & vbCrLf)
+            EscribirLog($"Analizando caja: Referencia={Referencia}, Stock={Stock}")
             If Stock > 0 Then
                 If IsNumeric(NumRefBase) Then
                     'Traza.AppendText($"Procesando caja: Variante={readerCajas("Variante")}, Referencia={readerCajas("Referencia")}, Stock={readerCajas("Stock")}" & vbCrLf)
@@ -942,7 +840,7 @@ Public Class FrmMenu
         Traza.AppendText("-------------------------------" & vbCrLf)
         Traza.Text += "Stock descargado correctamente" & vbCrLf
         Traza.Refresh()
-
+        EscribirLog("Stock descargado correctamente")
         If Environment.GetCommandLineArgs().Length > 1 Then
             End
         End If
@@ -950,6 +848,8 @@ Public Class FrmMenu
     End Sub
 
     Private Async Sub BtnActualizar_Click(sender As Object, e As EventArgs) Handles BtnActualizar.Click
+
+        EscribirLog("Iniciando actualización de pedidos...")
 
         Dim LastPedido As String = ""
         Dim NumPedidos As Integer = 0
@@ -1022,6 +922,7 @@ Public Class FrmMenu
         End Using
 
         MaxPedido = pedidos.Select(Function(p) p("id").ToString()).FirstOrDefault()
+        EscribirLog($"Último pedido: {MaxPedido}")
 
         ' si existe el paramero LASTPEDIDO en la tabla PARAMETROS , lo leemos para usarlo como punto de partida
         ' en la actualización de pedidos. De esta forma, evitamos consultar el estado de todos los pedidos cada
@@ -1073,6 +974,8 @@ Public Class FrmMenu
         OldTraza = Traza.Text
 
         For Each idPedido As String In pedidosActualizar
+
+            EscribirLog($"Actualizando pedido {idPedido}...")
 
             ConsumerKey = ClaveWoo
             ConsumerSecret = PassWoo
@@ -1160,7 +1063,11 @@ Public Class FrmMenu
         Traza.Text += "Pedidos actualizados correctamente" & vbCrLf
         Traza.Refresh()
 
+        EscribirLog("Actualización de pedidos finalizada.")
+
         BtnFacturar_Click(sender, e) ' llamamos a la función de facturar para facturar los pedidos que se han actualizado y los nuevos pedidos descargados
+
+        EscribirLog("Proceso de facturación finalizado.")
 
     End Sub
 
@@ -1218,6 +1125,8 @@ Public Class FrmMenu
         Traza.AppendText("Facturando pedidos..." & vbCrLf)
         Traza.Refresh()
 
+        EscribirLog("Iniciando proceso de facturación...")
+
         ' Seleccionamos los pedidos con estado nulo o vacio para facturar ordenados por idpedido
         Dim cmd As New OleDb.OleDbCommand("SELECT IdPedido FROM Pedidos WHERE (Estado Is Null Or Estado = '') AND IdWeb = @IdWeb ORDER BY IdPedido", conn)
         cmd.Parameters.AddWithValue("@IdWeb", WebId)
@@ -1234,6 +1143,8 @@ Public Class FrmMenu
         For Each idPedido As String In pedidosAFacturar
             Traza.Text = ($"Facturando pedido {idPedido}..." & vbCrLf)
             Traza.Refresh()
+
+            EscribirLog($"Facturando pedido {idPedido}...")
 
             Dim pedido As Object = Nothing
             pedido = LeerPedidoWoo(idPedido)
@@ -2006,6 +1917,18 @@ Public Class FrmMenu
             currentLine = 0
             pageNumber = 1
         End If
+    End Sub
+
+    Private Sub EscribirLog(mensaje As String)
+
+        Try
+            Using writer As New StreamWriter(FicheroLog, True, System.Text.Encoding.UTF8)
+                writer.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {mensaje}")
+            End Using
+        Catch ex As Exception
+            Debug.Print($"Error al escribir en Log.txt: {ex.Message}")
+        End Try
+
     End Sub
 
 End Class

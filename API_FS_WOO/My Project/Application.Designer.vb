@@ -34,15 +34,6 @@ Namespace My
         Protected Overrides Sub OnCreateMainForm()
             Me.MainForm = Global.API_FS_WOO.FrmMenu
         End Sub
-        
-        <Global.System.Diagnostics.DebuggerStepThroughAttribute()>  _
-        Protected Overrides Function OnInitialize(ByVal commandLineArgs As System.Collections.ObjectModel.ReadOnlyCollection(Of String)) As Boolean
-            Me.MinimumSplashScreenDisplayTime = 0
 
-            ' Guardar los argumentos de línea de comandos para acceso posterior
-            Global.API_FS_WOO.FrmMenu.ArgumentosLineaComandos = commandLineArgs
-
-            Return MyBase.OnInitialize(commandLineArgs)
-        End Function
     End Class
 End Namespace

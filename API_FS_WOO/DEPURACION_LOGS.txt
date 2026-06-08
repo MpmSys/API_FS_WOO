@@ -1,0 +1,161 @@
+═══════════════════════════════════════════════════════════════════════════════
+  GUÍA DE DEPURACIÓN: Modo Silencioso con Logs
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEMA:
+El programa se ejecuta desde el Programador de Tareas pero no escribe logs.
+
+CAMBIOS REALIZADOS:
+─────────────────────────────────────────────────────────────────────────────
+
+1. ✓ Refactorización de BtnActualizar_Click
+   - Extraída lógica en ActualizarPedidosAsync()
+   - Ahora se espera correctamente con Await
+
+2. ✓ Corrección del guardado de logs
+   - Log se guarda DESPUÉS de todos los mensajes
+   - Incluye codificación UTF-8 explícita
+   - Manejo de errores mejorado con fallback al escritorio
+
+3. ✓ Logging de depuración agregado
+   - Muestra todos los argumentos recibidos en Debug
+   - Muestra configuración procesada
+   - Útil para ver qué está pasando con DebugView
+
+4. ✓ Tiempo de espera aumentado
+   - Thread.Sleep(1000) antes de Application.Exit()
+   - Asegura que se escriban todos los archivos
+
+═══════════════════════════════════════════════════════════════════════════════
+  PASOS PARA DEPURAR
+═══════════════════════════════════════════════════════════════════════════════
+
+OPCIÓN 1: Prueba desde PowerShell (RECOMENDADO)
+─────────────────────────────────────────────────────────────────────────────
+
+1. Compila el proyecto en Visual Studio (F5 o Ctrl+Shift+B)
+
+2. Abre PowerShell como Administrador en la carpeta del proyecto
+
+3. Ejecuta el script de prueba:
+   .\test_actualizar.ps1
+
+4. El script te mostrará:
+   - Si se creó el archivo de log
+   - El contenido completo del log
+   - Información del archivo (tamaño, fechas)
+   - Log de error en escritorio si hubo problemas
+
+OPCIÓN 2: Prueba manual desde línea de comandos
+─────────────────────────────────────────────────────────────────────────────
+
+1. Abre CMD o PowerShell como Administrador
+
+2. Navega a la carpeta del ejecutable:
+   cd "C:\Users\manel\source\repos\MpmSys\API_FS_WOO\bin\Debug"
+
+3. Ejecuta con parámetros:
+   .\API_FS_WOO.exe /silent /actualizar /log:"C:\Logs\actualizar.txt"
+
+4. Verifica el archivo de log:
+   notepad C:\Logs\actualizar.txt
+
+OPCIÓN 3: Usar DebugView para ver mensajes Debug.Print
+─────────────────────────────────────────────────────────────────────────────
+
+1. Descarga DebugView de Sysinternals:
+   https://learn.microsoft.com/en-us/sysinternals/downloads/debugview
+
+2. Ejecuta DebugView como Administrador
+
+3. En DebugView: Capture > Capture Global Win32
+
+4. Ejecuta el programa en modo silencioso
+
+5. Deberías ver en DebugView:
+   [INICIO] Argumentos recibidos: 3
+     - Argumento: '/silent'
+     - Argumento: '/actualizar'
+     - Argumento: '/log:"C:\Logs\actualizar.txt"'
+   [CONFIG] Modo silencioso: True
+   [CONFIG] Comando: 'actualizar'
+   [CONFIG] Archivo log: 'C:\Logs\actualizar.txt'
+   [yyyy-MM-dd HH:mm:ss] Iniciando en modo silencioso...
+   ...
+
+OPCIÓN 4: Verificar Programador de Tareas
+─────────────────────────────────────────────────────────────────────────────
+
+1. Abre Programador de Tareas (taskschd.msc)
+
+2. Encuentra tu tarea y haz clic derecho > Propiedades
+
+3. Pestaña "General":
+   ☑ Ejecutar con los privilegios más altos
+   ☑ Configurar para: Windows 10/11
+
+4. Pestaña "Acciones":
+   - Programa: Ruta completa al .exe
+   - Argumentos: /silent /actualizar /log:"C:\Logs\actualizar.txt"
+   - Iniciar en: Carpeta donde está el .exe (sin las comillas)
+
+5. Pestaña "Configuración":
+   ☑ Permitir que se ejecute la tarea a petición
+   ☐ Detener la tarea si se ejecuta más de: [desmarcar o poner tiempo alto]
+
+6. Prueba la tarea:
+   - Clic derecho > Ejecutar
+   - Espera 1-2 minutos
+   - Verifica: C:\Logs\actualizar.txt
+
+═══════════════════════════════════════════════════════════════════════════════
+  PROBLEMAS COMUNES Y SOLUCIONES
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEMA: No se crea el archivo de log
+───────────────────────────────────────
+→ Verifica permisos en C:\Logs (la carpeta debe existir y tener permisos)
+→ Busca archivo de error en el escritorio: API_FS_WOO_Error.txt
+→ Usa DebugView para ver si hay mensajes de error
+→ Ejecuta el programa manualmente primero (sin Programador de Tareas)
+
+PROBLEMA: El log está vacío o truncado
+───────────────────────────────────────
+→ Verifica que no haya múltiples instancias ejecutándose
+→ Aumenta el tiempo de espera en Thread.Sleep si es necesario
+→ Verifica que la tarea no tenga un límite de tiempo de ejecución
+
+PROBLEMA: La tarea no se ejecuta en el Programador de Tareas
+─────────────────────────────────────────────────────────────
+→ Verifica que "Ejecutar con los privilegios más altos" esté marcado
+→ Verifica que la cuenta de usuario tenga permisos
+→ Revisa el Historial de la tarea (pestaña Historial en Programador de Tareas)
+→ Verifica que la ruta del ejecutable sea absoluta (no relativa)
+
+PROBLEMA: El programa se ejecuta pero no actualiza
+──────────────────────────────────────────────────
+→ Verifica la conexión a la API de WooCommerce
+→ Revisa el contenido del log para ver errores específicos
+→ Verifica que la base de datos esté accesible
+→ Comprueba las credenciales de WooCommerce en la BD
+
+═══════════════════════════════════════════════════════════════════════════════
+  ARCHIVOS MODIFICADOS
+═══════════════════════════════════════════════════════════════════════════════
+
+API_FS_WOO\FrmMenu.vb:
+  - Línea 316: FrmMenu_Load ahora es Async Sub
+  - Línea 462: Cambio de PerformClick() a Await ActualizarPedidosAsync()
+  - Línea 470-510: Reordenamiento del guardado de logs
+  - Línea 956: Nuevo método ActualizarPedidosAsync()
+  - Línea 1175: BtnActualizar_Click llama a ActualizarPedidosAsync()
+
+═══════════════════════════════════════════════════════════════════════════════
+  SIGUIENTE PASO
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Ejecuta: .\test_actualizar.ps1
+2. Reporta los resultados que ves
+3. Si no funciona, ejecuta DebugView y comparte los mensajes que ves
+
+═══════════════════════════════════════════════════════════════════════════════

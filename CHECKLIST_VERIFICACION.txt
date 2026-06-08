@@ -1,0 +1,257 @@
+═══════════════════════════════════════════════════════════════════════════════
+  ✅ CHECKLIST DE VERIFICACIÓN
+═══════════════════════════════════════════════════════════════════════════════
+
+Usa este checklist para verificar que todo funciona correctamente.
+
+═══════════════════════════════════════════════════════════════════════════════
+  FASE 1: COMPILACIÓN
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] El proyecto compila sin errores
+    Presiona F5 o Ctrl+Shift+B en Visual Studio
+
+[ ] No hay warnings críticos
+    Revisa la ventana "Lista de errores"
+
+═══════════════════════════════════════════════════════════════════════════════
+  FASE 2: PRUEBA MANUAL BÁSICA
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Ejecutar desde línea de comandos funciona:
+    cd "C:\Users\manel\source\repos\MpmSys\API_FS_WOO\bin\Debug"
+    .\API_FS_WOO.exe /silent /actualizar /log:"C:\Logs\test.txt"
+
+[ ] Se crea el directorio C:\Logs automáticamente
+
+[ ] Se crea el archivo C:\Logs\test.txt
+
+[ ] El archivo contiene contenido (no está vacío)
+
+[ ] La primera línea contiene timestamp: [yyyy-MM-dd HH:mm:ss]
+
+[ ] La última línea dice "Log guardado en: C:\Logs\test.txt"
+
+[ ] Puedes abrir el archivo mientras el programa se ejecuta (no está bloqueado)
+
+═══════════════════════════════════════════════════════════════════════════════
+  FASE 3: PRUEBA DE ESCRITURA EN TIEMPO REAL
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Ejecutar el script de prueba PowerShell:
+    .\test_actualizar.ps1
+
+[ ] El script muestra líneas del log en tiempo real (color cyan)
+
+[ ] Al final muestra el contenido completo del log
+
+[ ] Muestra tamaño del archivo > 0 bytes
+
+[ ] Muestra fecha de creación/modificación reciente
+
+═══════════════════════════════════════════════════════════════════════════════
+  FASE 4: PRUEBA DE MONITOREO MANUAL
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Terminal 1: Ejecutar programa
+    .\API_FS_WOO.exe /silent /actualizar /log:"C:\Logs\monitor.txt"
+
+[ ] Terminal 2: Monitorear log en tiempo real
+    Get-Content "C:\Logs\monitor.txt" -Wait
+
+[ ] Las líneas aparecen en Terminal 2 mientras el programa se ejecuta en Terminal 1
+
+[ ] No hay retraso significativo (< 1 segundo) entre ejecución y escritura
+
+═══════════════════════════════════════════════════════════════════════════════
+  FASE 5: PRUEBA DE FALLBACK AL ESCRITORIO
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Ejecutar con ruta inválida:
+    .\API_FS_WOO.exe /silent /actualizar /log:"Z:\NoExiste\test.txt"
+
+[ ] El programa NO falla ni se cierra inesperadamente
+
+[ ] Se crea archivo en el escritorio: Desktop\API_FS_WOO_Log.txt
+
+[ ] El archivo del escritorio contiene los mensajes con [FALLBACK]
+
+═══════════════════════════════════════════════════════════════════════════════
+  FASE 6: PRUEBA CON DEBUGVIEW (OPCIONAL PERO RECOMENDADO)
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Descargar DebugView:
+    https://learn.microsoft.com/sysinternals/downloads/debugview
+
+[ ] Ejecutar DebugView como Administrador
+
+[ ] Activar: Capture > Capture Global Win32
+
+[ ] Ejecutar el programa en modo silencioso
+
+[ ] DebugView muestra:
+    [ ] [INICIO] Argumentos recibidos: 3
+    [ ] [CONFIG] Modo silencioso: True
+    [ ] [CONFIG] Comando: 'actualizar'
+    [ ] [CONFIG] Archivo log: '...'
+    [ ] [LOG] Directorio creado: C:\Logs (si no existía)
+    [ ] Todos los mensajes del log
+    [ ] NO aparece [ERROR ESCRITURA LOG] (si todo va bien)
+
+═══════════════════════════════════════════════════════════════════════════════
+  FASE 7: CONFIGURACIÓN DEL PROGRAMADOR DE TAREAS
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Abrir Programador de Tareas (taskschd.msc)
+
+[ ] Crear nueva tarea o modificar existente
+
+[ ] Configurar pestaña "General":
+    [ ] Ejecutar tanto si el usuario inició sesión como si no
+    [ ] Ejecutar con los privilegios más altos ✓
+    [ ] Configurar para: Windows 10
+
+[ ] Configurar pestaña "Acciones":
+    Programa o script:
+    C:\Users\manel\source\repos\MpmSys\API_FS_WOO\bin\Debug\API_FS_WOO.exe
+
+    Agregar argumentos:
+    /silent /actualizar /log:"C:\Logs\actualizar.txt"
+
+    Iniciar en:
+    C:\Users\manel\source\repos\MpmSys\API_FS_WOO\bin\Debug
+
+[ ] Configurar pestaña "Desencadenadores":
+    [ ] Configurar según necesidad (ej: cada 30 minutos)
+    [ ] Habilitado ✓
+
+[ ] Configurar pestaña "Condiciones":
+    [ ] Desmarcar "Iniciar solo si el equipo está conectado a CA"
+    [ ] Desmarcar "Detener si el equipo pasa a energía de batería"
+
+[ ] Configurar pestaña "Configuración":
+    [ ] Permitir que se ejecute la tarea a petición ✓
+    [ ] Desmarcar "Detener la tarea si se ejecuta más de..." (o poner 1 hora)
+
+[ ] Guardar la tarea
+
+═══════════════════════════════════════════════════════════════════════════════
+  FASE 8: PRUEBA DEL PROGRAMADOR DE TAREAS
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Borrar log anterior si existe:
+    del C:\Logs\actualizar.txt
+
+[ ] En Programador de Tareas, clic derecho en la tarea > Ejecutar
+
+[ ] Esperar 1-2 minutos
+
+[ ] Verificar que se creó: C:\Logs\actualizar.txt
+
+[ ] Abrir el archivo y verificar:
+    [ ] Contiene líneas con timestamps
+    [ ] Primera línea: [yyyy-MM-dd HH:mm:ss] Iniciando en modo silencioso...
+    [ ] Contiene: "Ejecutando: Actualización de pedidos..."
+    [ ] Contiene mensajes de actualización de pedidos
+    [ ] Última línea: "Log guardado en: C:\Logs\actualizar.txt"
+
+[ ] Verificar historial de la tarea:
+    [ ] Pestaña "Historial" muestra ejecución exitosa (código 0)
+    [ ] No hay errores en el historial
+
+═══════════════════════════════════════════════════════════════════════════════
+  FASE 9: VERIFICACIÓN DE ACTUALIZACIÓN DE PEDIDOS
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] El log muestra URLs de la API de WooCommerce
+
+[ ] El log muestra "Status Code: 200 OK" para las peticiones
+
+[ ] El log muestra IDs de pedidos siendo procesados
+
+[ ] La base de datos se actualiza correctamente
+
+[ ] No hay errores de conexión en el log
+
+═══════════════════════════════════════════════════════════════════════════════
+  FASE 10: VERIFICACIÓN DE EJECUCIÓN PROGRAMADA
+═══════════════════════════════════════════════════════════════════════════════
+
+[ ] Esperar a la siguiente ejecución programada
+
+[ ] Verificar que el log se actualiza con nueva fecha/hora
+
+[ ] Verificar que el log contiene las ejecuciones anteriores (log acumulativo)
+
+[ ] Cada ejecución tiene su propio bloque con timestamps
+
+═══════════════════════════════════════════════════════════════════════════════
+  PROBLEMAS COMUNES Y SOLUCIONES
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEMA: El archivo de log no se crea
+───────────────────────────────────────────────────────────────────────────
+✓ Verificar permisos en C:\Logs (crear manualmente y dar permisos)
+✓ Buscar Desktop\API_FS_WOO_Log.txt (fallback automático)
+✓ Ejecutar DebugView para ver mensajes de error
+✓ Verificar sintaxis del argumento: /log:"C:\Logs\actualizar.txt"
+
+PROBLEMA: El archivo se crea pero está vacío
+───────────────────────────────────────────────────────────────────────────
+✓ El programa probablemente se cerró antes de escribir
+✓ Ejecutar con DebugView para ver qué pasa
+✓ Verificar que no hay errores de conexión a la BD o API
+✓ Revisar Desktop\API_FS_WOO_Error.txt por errores
+
+PROBLEMA: La tarea dice "En ejecución" pero no termina
+───────────────────────────────────────────────────────────────────────────
+✓ Marcar "Detener la tarea si se ejecuta más de: 1 hora"
+✓ Verificar conexión a la API de WooCommerce
+✓ El log debería mostrar dónde se quedó colgado
+✓ Puede estar esperando respuesta de una API que no responde
+
+PROBLEMA: La tarea falla con código de error
+───────────────────────────────────────────────────────────────────────────
+✓ Revisar pestaña "Historial" de la tarea para ver el código de error
+✓ Código 0xFFFFFFFF: Problema con permisos o ruta del ejecutable
+✓ Verificar que "Iniciar en" apunta a la carpeta correcta
+✓ Verificar que el ejecutable existe en la ruta especificada
+
+PROBLEMA: El log muestra errores de API
+───────────────────────────────────────────────────────────────────────────
+✓ Verificar credenciales de WooCommerce en la BD
+✓ Verificar conectividad a la URL de WooCommerce
+✓ El log debería mostrar el error exacto de la API
+✓ Verificar que las credenciales no hayan expirado
+
+═══════════════════════════════════════════════════════════════════════════════
+  RESULTADO FINAL ESPERADO
+═══════════════════════════════════════════════════════════════════════════════
+
+Después de completar todos los pasos, deberías tener:
+
+✅ Programa compila sin errores
+✅ Ejecución manual desde línea de comandos funciona
+✅ Archivo de log se crea con contenido completo
+✅ Log se escribe en tiempo real (visible con Get-Content -Wait)
+✅ Fallback al escritorio funciona si C:\Logs no es accesible
+✅ DebugView muestra todos los mensajes correctamente
+✅ Tarea programada configurada correctamente
+✅ Tarea ejecuta correctamente (código salida 0)
+✅ Log se actualiza con cada ejecución programada
+✅ Pedidos se actualizan correctamente en la BD
+
+═══════════════════════════════════════════════════════════════════════════════
+
+FIRMA DE COMPLETADO:
+
+Fecha: ______________
+
+Todas las verificaciones completadas: [ ] SÍ  [ ] NO
+
+Si NO, ¿qué falló?:
+_____________________________________________________________________________
+_____________________________________________________________________________
+_____________________________________________________________________________
+
+═══════════════════════════════════════════════════════════════════════════════

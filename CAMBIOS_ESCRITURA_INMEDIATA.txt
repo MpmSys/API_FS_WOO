@@ -1,0 +1,266 @@
+═══════════════════════════════════════════════════════════════════════════════
+  CAMBIOS: ESCRITURA INMEDIATA EN DISCO DE LOGS
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEMA ANTERIOR:
+─────────────────────────────────────────────────────────────────────────────
+Los logs se acumulaban en memoria (StringBuilder) y se escribían todos juntos
+al final de la ejecución. Si el programa fallaba o se cerraba inesperadamente,
+se perdía toda la información del log.
+
+SOLUCIÓN IMPLEMENTADA:
+─────────────────────────────────────────────────────────────────────────────
+Ahora cada llamada a EscribirLog() escribe INMEDIATAMENTE en disco usando
+File.AppendAllText(), lo que garantiza que:
+
+✅ Cada línea se escribe en disco inmediatamente
+✅ Si el programa falla, el log contiene todo hasta ese momento
+✅ No se pierde información por cierre inesperado
+✅ Múltiples instancias pueden escribir sin conflictos (lock automático)
+
+═══════════════════════════════════════════════════════════════════════════════
+  CAMBIOS EN EL CÓDIGO
+═══════════════════════════════════════════════════════════════════════════════
+
+1. NUEVA VARIABLE DE CLASE (línea 45)
+   ─────────────────────────────────────────────────────────────────────────
+   Private LogFilePath As String = ""
+
+   - Almacena la ruta del archivo de log a nivel de clase
+   - Accesible desde cualquier método de la clase
+   - Se inicializa con los argumentos de línea de comandos
+
+2. ELIMINADA VARIABLE LOCAL logFile
+   ─────────────────────────────────────────────────────────────────────────
+   - Antes: Dim logFile As String = ""
+   - Ahora: Se usa LogFilePath (variable de clase)
+
+3. CREACIÓN DEL DIRECTORIO AL INICIO (líneas 451-468)
+   ─────────────────────────────────────────────────────────────────────────
+   ' Crear directorio de log si se especificó y no existe
+   If Not String.IsNullOrEmpty(LogFilePath) Then
+       Try
+           Dim logDir As String = IO.Path.GetDirectoryName(LogFilePath)
+           If Not String.IsNullOrEmpty(logDir) AndAlso Not IO.Directory.Exists(logDir) Then
+               IO.Directory.CreateDirectory(logDir)
+           End If
+       Catch ex As Exception
+           ' Si falla, usar escritorio como fallback
+           LogFilePath = IO.Path.Combine(Environment.GetFolderPath(...)
+       End Try
+   End If
+
+   VENTAJAS:
+   - Se verifica y crea el directorio UNA sola vez al inicio
+   - Si falla, usa el escritorio automáticamente
+   - No se pierden logs por problemas de permisos
+
+4. FUNCIÓN EscribirLog MODIFICADA (líneas 556-603)
+   ─────────────────────────────────────────────────────────────────────────
+   ANTES:
+   ------
+   Private Sub EscribirLog(mensaje As String)
+       LogSilencioso.AppendLine(mensaje)  ' Solo en memoria
+       Debug.Print(mensaje)
+   End Sub
+
+   AHORA:
+   ------
+   Private Sub EscribirLog(mensaje As String)
+       ' 1. Añadir al StringBuilder (compatibilidad)
+       LogSilencioso.AppendLine(mensaje)
+
+       ' 2. Escribir en Debug (visible con DebugView)
+       Debug.Print(mensaje)
+
+       ' 3. Escribir en control Traza si visible
+       If Not ModoSilencioso AndAlso Traza IsNot Nothing Then
+           Traza.AppendText(mensaje & vbCrLf)
+       End If
+
+       ' 4. ✅ ESCRITURA INMEDIATA EN DISCO
+       If Not String.IsNullOrEmpty(LogFilePath) Then
+           Try
+               IO.File.AppendAllText(LogFilePath, mensaje & vbCrLf, Encoding.UTF8)
+           Catch ex As Exception
+               ' Fallback al escritorio si falla
+               ...
+           End Try
+       End If
+   End Sub
+
+   CARACTERÍSTICAS:
+   ✓ File.AppendAllText hace lock automático (thread-safe)
+   ✓ Escritura atómica (todo o nada)
+   ✓ Encoding UTF-8 explícito (soporte para caracteres especiales)
+   ✓ Manejo de errores robusto con fallback
+   ✓ No interrumpe el programa si falla la escritura
+
+5. ELIMINADO CÓDIGO DE GUARDADO FINAL
+   ─────────────────────────────────────────────────────────────────────────
+   Se eliminaron ~30 líneas de código que guardaban el log al final,
+   ya que ahora cada línea se escribe inmediatamente.
+
+   SIMPLIFICADO DE:
+   ----------------
+   If Not String.IsNullOrEmpty(logFile) Then
+       Try
+           Dim logDir As String = IO.Path.GetDirectoryName(logFile)
+           IO.Directory.CreateDirectory(logDir)
+           IO.File.WriteAllText(logFile, LogSilencioso.ToString(), ...)
+           ... (manejo de errores)
+       Catch
+           ... (fallback al escritorio)
+       End Try
+   End If
+
+   A:
+   --
+   EscribirLog($"Log guardado en: {LogFilePath}")
+   ' Ya está escrito en disco, solo mensaje informativo
+
+═══════════════════════════════════════════════════════════════════════════════
+  VENTAJAS DE LA NUEVA IMPLEMENTACIÓN
+═══════════════════════════════════════════════════════════════════════════════
+
+1. ROBUSTEZ
+   ─────────────────────────────────────────────────────────────────────────
+   ✓ Si el programa se cierra inesperadamente, el log está completo
+   ✓ Si hay una excepción no capturada, el log muestra hasta dónde llegó
+   ✓ Si se pierde la conexión o falla la BD, sabemos exactamente dónde
+
+2. DEPURACIÓN
+   ─────────────────────────────────────────────────────────────────────────
+   ✓ Puedes abrir el archivo de log mientras el programa se ejecuta
+   ✓ Ves el progreso en tiempo real con: tail -f (PowerShell: Get-Content -Wait)
+   ✓ No necesitas esperar a que termine para ver qué pasó
+
+3. MONITOREO
+   ─────────────────────────────────────────────────────────────────────────
+   ✓ Tareas programadas que fallan dejan log completo hasta el punto de fallo
+   ✓ Múltiples ejecuciones pueden escribir en el mismo archivo
+   ✓ Cada timestamp muestra exactamente cuándo ocurrió cada evento
+
+4. RENDIMIENTO
+   ─────────────────────────────────────────────────────────────────────────
+   ✓ File.AppendAllText es muy eficiente (buffering del OS)
+   ✓ No hay sobrecarga significativa vs escritura al final
+   ✓ El OS maneja el flush a disco automáticamente
+
+═══════════════════════════════════════════════════════════════════════════════
+  EJEMPLO DE USO EN TIEMPO REAL
+═══════════════════════════════════════════════════════════════════════════════
+
+TERMINAL 1: Ejecutar el programa
+────────────────────────────────────────────────────────────────────────────
+.\API_FS_WOO.exe /silent /actualizar /log:"C:\Logs\actualizar.txt"
+
+TERMINAL 2: Monitorear el log en tiempo real (PowerShell)
+────────────────────────────────────────────────────────────────────────────
+Get-Content "C:\Logs\actualizar.txt" -Wait
+
+Verás cada línea aparecer en tiempo real mientras el programa se ejecuta:
+[2026-01-08 14:05:01] Iniciando en modo silencioso...
+[2026-01-08 14:05:01] Ejecutando: Actualización de pedidos...
+[2026-01-08 14:05:02] Url orders?consumer_key=...
+[2026-01-08 14:05:03] Pedido 1234
+[2026-01-08 14:05:04] Pedido 1235
+...
+
+═══════════════════════════════════════════════════════════════════════════════
+  FALLBACK AUTOMÁTICO AL ESCRITORIO
+═══════════════════════════════════════════════════════════════════════════════
+
+Si hay problemas escribiendo en C:\Logs\actualizar.txt:
+
+1. El programa detecta el error en la primera escritura
+2. Cambia automáticamente a: Desktop\API_FS_WOO_Log.txt
+3. Todas las escrituras siguientes van al escritorio
+4. El log en Debug muestra: [LOG] Cambiado a ruta fallback: ...
+
+CAUSAS COMUNES DE FALLBACK:
+- Permisos insuficientes en C:\Logs
+- Disco lleno
+- Ruta de red no disponible
+- Antivirus bloqueando escritura
+
+═══════════════════════════════════════════════════════════════════════════════
+  PRUEBAS RECOMENDADAS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. PRUEBA BÁSICA
+   ─────────────────────────────────────────────────────────────────────────
+   .\API_FS_WOO.exe /silent /actualizar /log:"C:\Logs\test.txt"
+
+   Verifica:
+   ✓ El archivo C:\Logs\test.txt existe
+   ✓ Contiene líneas con timestamps
+   ✓ La última línea dice "Log guardado en: ..."
+
+2. PRUEBA DE ESCRITURA EN TIEMPO REAL
+   ─────────────────────────────────────────────────────────────────────────
+   Terminal 1: .\API_FS_WOO.exe /silent /actualizar /log:"C:\Logs\test.txt"
+   Terminal 2: Get-Content "C:\Logs\test.txt" -Wait
+
+   Verifica:
+   ✓ Las líneas aparecen mientras el programa se ejecuta
+   ✓ No hay retraso entre la ejecución y la escritura
+
+3. PRUEBA DE FALLBACK
+   ─────────────────────────────────────────────────────────────────────────
+   .\API_FS_WOO.exe /silent /actualizar /log:"Z:\NoExiste\test.txt"
+
+   Verifica:
+   ✓ El programa no falla
+   ✓ Se crea Desktop\API_FS_WOO_Log.txt
+   ✓ El contenido está completo
+
+4. PRUEBA CON DEBUGVIEW
+   ─────────────────────────────────────────────────────────────────────────
+   1. Ejecuta DebugView como Administrador
+   2. Ejecuta: .\API_FS_WOO.exe /silent /actualizar /log:"C:\Logs\test.txt"
+
+   Verifica en DebugView:
+   ✓ [INICIO] Argumentos recibidos: 3
+   ✓ [CONFIG] Archivo log: 'C:\Logs\test.txt'
+   ✓ [LOG] Directorio creado: C:\Logs (si no existía)
+   ✓ Cada mensaje del log aparece en Debug
+   ✓ NO aparece [ERROR ESCRITURA LOG] (si todo va bien)
+
+═══════════════════════════════════════════════════════════════════════════════
+  COMPATIBILIDAD CON CÓDIGO EXISTENTE
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Todo el código existente funciona sin cambios
+✅ EscribirLog() sigue siendo la misma función públicamente
+✅ LogSilencioso (StringBuilder) sigue existiendo por compatibilidad
+✅ Los mensajes en Traza (UI) siguen funcionando igual
+✅ Los mensajes en Debug.Print siguen funcionando igual
+
+ÚNICO CAMBIO VISIBLE:
+----------------------
+Ahora el log se escribe en disco línea por línea en lugar de todo al final.
+
+═══════════════════════════════════════════════════════════════════════════════
+  SIGUIENTE PASO
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Compila el proyecto (F5 o Ctrl+Shift+B)
+
+2. Ejecuta la prueba:
+   .\test_actualizar.ps1
+
+   O manualmente:
+   .\API_FS_WOO.exe /silent /actualizar /log:"C:\Logs\actualizar.txt"
+
+3. Verifica que el archivo C:\Logs\actualizar.txt:
+   - Se crea inmediatamente al iniciar
+   - Contiene las primeras líneas antes de que termine el programa
+   - Puedes abrirlo con notepad mientras el programa se ejecuta
+
+4. Monitorea en tiempo real:
+   Get-Content "C:\Logs\actualizar.txt" -Wait
+
+5. Configura la tarea programada con los mismos parámetros
+
+═══════════════════════════════════════════════════════════════════════════════

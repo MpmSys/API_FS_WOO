@@ -1,0 +1,206 @@
+═══════════════════════════════════════════════════════════════════════════════
+  CONFIGURACIÓN DEL PROGRAMADOR DE TAREAS DE WINDOWS
+═══════════════════════════════════════════════════════════════════════════════
+
+INFORMACIÓN DE LA TAREA
+─────────────────────────────────────────────────────────────────────────────
+Nombre: API_FS_WOO - Actualizar Pedidos
+Descripción: Actualiza pedidos de WooCommerce automáticamente
+
+
+PESTAÑA "GENERAL"
+─────────────────────────────────────────────────────────────────────────────
+[✓] Ejecutar tanto si el usuario inició sesión como si no
+[✓] Ejecutar con los privilegios más altos
+[ ] Oculta
+Configurar para: Windows 10
+
+
+PESTAÑA "DESENCADENADORES"
+─────────────────────────────────────────────────────────────────────────────
+Ejemplo 1: Cada hora
+  - Comenzar la tarea: Según una programación
+  - Configuración: Diariamente, a las 00:00:00
+  - Repetir cada: 1 hora
+  - Durante: 1 día
+  - [✓] Habilitado
+
+Ejemplo 2: Cada 30 minutos
+  - Comenzar la tarea: Según una programación
+  - Configuración: Diariamente, a las 00:00:00
+  - Repetir cada: 30 minutos
+  - Durante: 1 día
+  - [✓] Habilitado
+
+
+PESTAÑA "ACCIONES"
+─────────────────────────────────────────────────────────────────────────────
+Acción: Iniciar un programa
+
+Configuración del programa o script:
+  Programa o script:
+    C:\Users\manel\source\repos\MpmSys\API_FS_WOO\bin\Debug\API_FS_WOO.exe
+
+    O si está publicado:
+    C:\Program Files\API_FS_WOO\API_FS_WOO.exe
+
+Agregar argumentos (opcional):
+    /silent /actualizar /log:"C:\Logs\actualizar.txt"
+
+Iniciar en (opcional):
+    C:\Users\manel\source\repos\MpmSys\API_FS_WOO\bin\Debug
+
+    O si está publicado:
+    C:\Program Files\API_FS_WOO
+
+IMPORTANTE:
+  - Usa rutas ABSOLUTAS (con C:\...), NO rutas relativas
+  - La carpeta "Iniciar en" debe existir y contener el ejecutable
+  - Si usas comillas en los argumentos, solo en el valor del log: /log:"C:\Logs\..."
+
+
+PESTAÑA "CONDICIONES"
+─────────────────────────────────────────────────────────────────────────────
+Energía:
+  [ ] Iniciar la tarea solo si el equipo está conectado a CA
+  [ ] Detener si el equipo pasa a energía de batería
+  [✓] Reactivar el equipo para ejecutar esta tarea (opcional)
+
+Red:
+  [ ] Iniciar solo si está disponible la siguiente conexión de red
+      (o marcarlo y seleccionar "Cualquier conexión")
+
+
+PESTAÑA "CONFIGURACIÓN"
+─────────────────────────────────────────────────────────────────────────────
+[✓] Permitir que se ejecute la tarea a petición
+[✓] Ejecutar la tarea lo antes posible después de perder el inicio programado
+[ ] Si la tarea falla, reiniciar cada: [DESMARCAR]
+[ ] Detener la tarea si se ejecuta más de: [DESMARCAR o poner 1 hora]
+[ ] Detener todas las tareas que se estén ejecutando si no finalizan a petición
+Si la tarea ya se está ejecutando:
+  ○ No iniciar una nueva instancia
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  CREAR LA TAREA DESDE XML (MÉTODO ALTERNATIVO)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Guarda el siguiente contenido en un archivo llamado: tarea_actualizar.xml
+
+2. EDITA EL ARCHIVO XML y reemplaza:
+   - TUNOMBREDEUSUARIO con tu nombre de usuario de Windows
+   - Las rutas del ejecutable con las correctas
+
+3. Importa en Programador de Tareas:
+   - Abre Programador de Tareas (taskschd.msc)
+   - Clic derecho en "Biblioteca del Programador de tareas"
+   - "Importar tarea..."
+   - Selecciona el archivo XML
+   - Ajusta las credenciales si es necesario
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Archivo XML de ejemplo (tarea_actualizar.xml):
+
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Date>2026-01-01T12:00:00</Date>
+    <Author>TUNOMBREDEUSUARIO</Author>
+    <Description>Actualiza pedidos de WooCommerce automáticamente cada 30 minutos</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <Repetition>
+        <Interval>PT30M</Interval>
+        <Duration>P1D</Duration>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <StartBoundary>2026-01-01T00:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>TUNOMBREDEUSUARIO</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Users\manel\source\repos\MpmSys\API_FS_WOO\bin\Debug\API_FS_WOO.exe</Command>
+      <Arguments>/silent /actualizar /log:"C:\Logs\actualizar.txt"</Arguments>
+      <WorkingDirectory>C:\Users\manel\source\repos\MpmSys\API_FS_WOO\bin\Debug</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+
+═══════════════════════════════════════════════════════════════════════════════
+  VERIFICAR QUE LA TAREA FUNCIONE
+═══════════════════════════════════════════════════════════════════════════════
+
+1. En Programador de Tareas, busca tu tarea
+
+2. Clic derecho > "Ejecutar"
+
+3. Espera 1-2 minutos
+
+4. Verifica:
+   - El archivo C:\Logs\actualizar.txt debe existir
+   - El archivo debe tener contenido (no estar vacío)
+   - La última línea debe decir "Log guardado en: C:\Logs\actualizar.txt"
+
+5. Si no funciona:
+   - Revisa la pestaña "Historial" de la tarea para ver errores
+   - Ejecuta el test_actualizar.bat primero (fuera del Programador de Tareas)
+   - Usa DebugView (ver DEPURACION_LOGS.txt)
+
+═══════════════════════════════════════════════════════════════════════════════
+  PROBLEMAS COMUNES
+═══════════════════════════════════════════════════════════════════════════════
+
+PROBLEMA: "El sistema no puede encontrar el archivo especificado"
+→ La ruta del ejecutable está mal o no existe
+→ Usa la ruta COMPLETA y ABSOLUTA (C:\...)
+→ Verifica que el archivo realmente exista en esa ubicación
+
+PROBLEMA: La tarea se ejecuta pero no hace nada
+→ Verifica que "Ejecutar con los privilegios más altos" esté marcado
+→ Verifica que la carpeta C:\Logs exista (créala manualmente)
+→ Verifica permisos de escritura en C:\Logs
+
+PROBLEMA: La tarea aparece como "En ejecución" pero no termina
+→ Puede estar colgada esperando una conexión
+→ Marca "Detener la tarea si se ejecuta más de: 1 hora"
+→ Verifica la conexión a la API de WooCommerce
+
+PROBLEMA: El log se crea pero está vacío
+→ El programa probablemente se cerró antes de escribir
+→ Verifica que no haya errores en el código
+→ Ejecuta manualmente primero: test_actualizar.bat
+
+═══════════════════════════════════════════════════════════════════════════════

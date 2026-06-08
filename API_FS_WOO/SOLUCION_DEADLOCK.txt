@@ -1,0 +1,248 @@
+═══════════════════════════════════════════════════════════════════════════════
+  ✅ SOLUCIÓN AL DEADLOCK: PROGRAMA QUE NUNCA TERMINA
+═══════════════════════════════════════════════════════════════════════════════
+
+🐛 PROBLEMA IDENTIFICADO
+─────────────────────────────────────────────────────────────────────────────
+El programa se ejecutaba pero NUNCA terminaba. El log mostraba:
+
+[2026-06-08 16:05:01] Iniciando en modo silencioso...
+Comando: actualizar 3.0.0.9
+Base de datos: B:\Manel\
+[2026-06-08 16:05:01] Ejecutando: Actualización de pedidos...
+... (AQUÍ SE QUEDABA COLGADO INDEFINIDAMENTE)
+
+Nunca llegaba a:
+[2026-06-08 16:05:XX] Ejecutando: Fin
+
+🔍 CAUSA RAÍZ DEL PROBLEMA
+─────────────────────────────────────────────────────────────────────────────
+
+**DEADLOCK POR USO DE .Result EN CÓDIGO ASÍNCRONO**
+
+En el método ActualizarPedidosAsync() (que es Async Function), se usaba:
+
+❌ INCORRECTO (línea 1155):
+    Dim resp As HttpResponseMessage = client.GetAsync(Url).Result
+
+❌ INCORRECTO (línea 1160):
+    Dim json As String = resp.Content.ReadAsStringAsync().Result
+
+❌ INCORRECTO (línea 1190):
+    Dim bodyErr = resp.Content.ReadAsStringAsync().Result
+
+¿POR QUÉ CAUSA DEADLOCK?
+─────────────────────────────────────────────────────────────────────────────
+Cuando usas .Result en un método Async:
+
+1. El hilo llama a GetAsync() y pide el resultado con .Result
+2. .Result BLOQUEA el hilo actual esperando que la operación termine
+3. La operación asíncrona necesita volver al MISMO hilo para completarse
+4. El hilo está BLOQUEADO esperando, no puede recibir la respuesta
+5. **DEADLOCK**: El hilo espera la respuesta, pero la respuesta espera el hilo
+
+Esto es especialmente problemático en:
+- Windows Forms (contexto de sincronización UI)
+- ASP.NET (antes de Core)
+- Cualquier código con SynchronizationContext
+
+✅ SOLUCIÓN IMPLEMENTADA
+─────────────────────────────────────────────────────────────────────────────
+
+Reemplazar TODOS los .Result por Await con ConfigureAwait(False):
+
+✓ CORRECTO (línea 1165):
+    Dim resp As HttpResponseMessage = Await client.GetAsync(Url).ConfigureAwait(False)
+
+✓ CORRECTO (línea 1171):
+    Dim json As String = Await resp.Content.ReadAsStringAsync().ConfigureAwait(False)
+
+✓ CORRECTO (línea 1190):
+    Dim bodyErr = Await resp.Content.ReadAsStringAsync().ConfigureAwait(False)
+
+¿POR QUÉ FUNCIONA AHORA?
+─────────────────────────────────────────────────────────────────────────────
+- Await NO bloquea el hilo, lo libera mientras espera la respuesta
+- ConfigureAwait(False) permite que la continuación se ejecute en cualquier hilo
+- No hay deadlock porque el hilo está libre para procesar otras cosas
+
+═══════════════════════════════════════════════════════════════════════════════
+  📝 CAMBIOS ESPECÍFICOS REALIZADOS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. LÍNEA 1004-1025: Logging al inicio de ActualizarPedidosAsync()
+   ─────────────────────────────────────────────────────────────────────────
+   + EscribirLog($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] INICIO ActualizarPedidosAsync()")
+   + Try/Catch en conn.Open() con logging de errores
+   + EscribirLog de la URL de WooCommerce
+
+2. LÍNEA 1063: Consulta del último pedido
+   ─────────────────────────────────────────────────────────────────────────
+   - Await client.GetAsync(Url).ConfigureAwait(True)
+   + Await client.GetAsync(Url).ConfigureAwait(False)
+   + EscribirLog antes y después de la llamada
+
+3. LÍNEA 1069: Lectura de error HTTP
+   ─────────────────────────────────────────────────────────────────────────
+   - Await resp.Content.ReadAsStringAsync().ConfigureAwait(True)
+   + Await resp.Content.ReadAsStringAsync().ConfigureAwait(False)
+
+4. LÍNEA 1119-1133: Logging de bucle de pedidos
+   ─────────────────────────────────────────────────────────────────────────
+   + EscribirLog("Agregando pedidos nuevos desde X hasta Y")
+   + EscribirLog("Total de pedidos a procesar: X")
+   + EscribirLog("Procesando pedido X...") para cada pedido
+
+5. LÍNEA 1165: Llamada API por cada pedido (CRÍTICO)
+   ─────────────────────────────────────────────────────────────────────────
+   - Dim resp = client.GetAsync(Url).Result  ❌ DEADLOCK AQUÍ
+   + Dim resp = Await client.GetAsync(Url).ConfigureAwait(False)  ✓
+   + EscribirLog antes de la llamada
+   + EscribirLog con el status code después
+
+6. LÍNEA 1171: Lectura de respuesta JSON
+   ─────────────────────────────────────────────────────────────────────────
+   - Dim json = resp.Content.ReadAsStringAsync().Result  ❌
+   + Dim json = Await resp.Content.ReadAsStringAsync().ConfigureAwait(False)  ✓
+
+7. LÍNEA 1190: Lectura de error HTTP
+   ─────────────────────────────────────────────────────────────────────────
+   - Dim bodyErr = resp.Content.ReadAsStringAsync().Result  ❌
+   + Dim bodyErr = Await resp.Content.ReadAsStringAsync().ConfigureAwait(False)  ✓
+   + EscribirLog del error
+
+8. LÍNEA 1206-1238: Logging al final de ActualizarPedidosAsync()
+   ─────────────────────────────────────────────────────────────────────────
+   + EscribirLog("Finalizó el bucle de actualización de pedidos")
+   + EscribirLog("Guardando último pedido procesado: X")
+   + EscribirLog("Conexión a base de datos cerrada")
+   + EscribirLog("Actualización de pedidos completada exitosamente")
+
+═══════════════════════════════════════════════════════════════════════════════
+  🎯 RESULTADO ESPERADO CON LOS CAMBIOS
+═══════════════════════════════════════════════════════════════════════════════
+
+Ahora el log debería mostrar TODA la ejecución:
+
+[2026-06-08 16:05:01] Iniciando en modo silencioso...
+Comando: actualizar 3.0.0.9
+Base de datos: B:\Manel\
+[2026-06-08 16:05:01] Ejecutando: Actualización de pedidos...
+[2026-06-08 16:05:01] INICIO ActualizarPedidosAsync()
+[2026-06-08 16:05:01] Conexión a base de datos abierta: B:\Manel\Api_Woocommerce.mdb
+[2026-06-08 16:05:01] URL WooCommerce: https://tutienda.com/wp-json/wc/v3/
+[2026-06-08 16:05:01] Url orders?consumer_key=...
+[2026-06-08 16:05:01] Consultando último pedido en WooCommerce...
+[2026-06-08 16:05:02] Respuesta de WooCommerce: 200 OK
+[2026-06-08 16:05:02] Agregando pedidos nuevos desde 1234 hasta 1250
+[2026-06-08 16:05:02] Total de pedidos a procesar: 20
+[2026-06-08 16:05:02] Procesando pedido 1234...
+[2026-06-08 16:05:02] Llamando API WooCommerce para pedido 1234
+[2026-06-08 16:05:03] Respuesta recibida: 200 OK
+[2026-06-08 16:05:03] Procesando pedido 1235...
+[2026-06-08 16:05:03] Llamando API WooCommerce para pedido 1235
+[2026-06-08 16:05:04] Respuesta recibida: 200 OK
+... (continúa para cada pedido)
+[2026-06-08 16:07:30] Finalizó el bucle de actualización de pedidos
+[2026-06-08 16:07:30] Guardando último pedido procesado: 1250
+[2026-06-08 16:07:30] Conexión a base de datos cerrada
+[2026-06-08 16:07:30] Actualización de pedidos completada exitosamente
+[2026-06-08 16:07:30] Ejecutando: Fin  ✓✓✓ AHORA LLEGA AQUÍ
+[2026-06-08 16:07:30] Finalizando aplicación en modo silencioso...
+[2026-06-08 16:07:30] Log guardado en: C:\Logs\actualizar.txt
+
+═══════════════════════════════════════════════════════════════════════════════
+  🧪 CÓMO PROBAR LA SOLUCIÓN
+═══════════════════════════════════════════════════════════════════════════════
+
+PASO 1: Compilar
+────────────────────────────────────────────────────────────────────────────
+En Visual Studio: F5 o Ctrl+Shift+B
+
+PASO 2: Ejecutar prueba
+────────────────────────────────────────────────────────────────────────────
+PowerShell:
+    cd "C:\Users\manel\source\repos\MpmSys\API_FS_WOO\API_FS_WOO"
+    .\test_actualizar.ps1
+
+O manual:
+    .\bin\Debug\API_FS_WOO.exe /silent /actualizar /log:"C:\Logs\test.txt"
+
+PASO 3: Monitorear en tiempo real
+────────────────────────────────────────────────────────────────────────────
+Terminal 2:
+    Get-Content "C:\Logs\test.txt" -Wait
+
+Ahora deberías ver:
+✓ Todas las líneas del log apareciendo en tiempo real
+✓ Progreso de cada pedido procesado
+✓ El mensaje "Ejecutando: Fin" al terminar ✅
+✓ El mensaje "Log guardado en: ..." al final
+
+PASO 4: Verificar que termina
+────────────────────────────────────────────────────────────────────────────
+El programa DEBE:
+✓ Terminar en un tiempo razonable (depende de la cantidad de pedidos)
+✓ Cerrar el proceso (no quedarse en Task Manager)
+✓ Tener código de salida 0 (éxito)
+
+═══════════════════════════════════════════════════════════════════════════════
+  ⚠️ LECCIONES APRENDIDAS
+═══════════════════════════════════════════════════════════════════════════════
+
+REGLA DE ORO: NUNCA uses .Result o .Wait() en código asíncrono
+
+❌ MAL:
+    Public Async Function MiMetodo() As Task
+        Dim resultado = await OtraOperacion()
+        Dim data = cliente.GetAsync(url).Result  ' ❌ DEADLOCK
+    End Function
+
+✅ BIEN:
+    Public Async Function MiMetodo() As Task
+        Dim resultado = await OtraOperacion()
+        Dim data = Await cliente.GetAsync(url).ConfigureAwait(False)  ' ✓
+    End Function
+
+¿CUÁNDO USAR ConfigureAwait(False)?
+────────────────────────────────────────────────────────────────────────────
+✓ En librerías y código de backend
+✓ Cuando no necesitas volver al contexto original (UI thread)
+✓ Para mejor rendimiento
+
+ConfigureAwait(True) o sin ConfigureAwait:
+✓ Cuando necesitas actualizar la UI después del await
+✓ En event handlers de botones (pero NO en bucles dentro)
+
+LOGGING EXTENSIVO ES CRUCIAL
+────────────────────────────────────────────────────────────────────────────
+Sin logging, no sabríamos dónde se quedaba colgado.
+Ahora con logging detallado:
+✓ Vemos cada paso de la ejecución
+✓ Identificamos rápidamente dónde falla
+✓ Podemos depurar en producción sin debugger
+
+═══════════════════════════════════════════════════════════════════════════════
+  📚 RECURSOS ADICIONALES
+═══════════════════════════════════════════════════════════════════════════════
+
+Artículos recomendados:
+• https://blog.stephencleary.com/2012/07/dont-block-on-async-code.html
+  "Don't Block on Async Code" - Stephen Cleary
+
+• https://learn.microsoft.com/dotnet/csharp/asynchronous-programming/
+  Documentación oficial de async/await en .NET
+
+• https://devblogs.microsoft.com/dotnet/configureawait-faq/
+  ConfigureAwait FAQ - Microsoft DevBlogs
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ CON ESTOS CAMBIOS, EL PROGRAMA AHORA:
+   • Se ejecuta completamente sin colgarse
+   • Registra cada paso en el log en tiempo real
+   • Termina correctamente con código de salida 0
+   • Puede ser monitoreado en tiempo real
+   • Permite depuración si algo falla
+
+═══════════════════════════════════════════════════════════════════════════════

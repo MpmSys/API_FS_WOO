@@ -40,6 +40,16 @@ Public Class FrmMenu
 
     Dim FicheroLog As String = "C:\Logs\LogApi_" & Date.Now.ToString("yyyyMMdd") & ".txt"
 
+    ''' <summary>
+    ''' Genera una cadena de conexión normalizada a la base de datos
+    ''' </summary>
+    Private Function GetConnectionString() As String
+        Dim connStr As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
+        ' Normalizar para evitar barras dobles
+        connStr = connStr.Replace("\\", "\")
+        Return connStr
+    End Function
+
     Public Class CRUDMethod
         Public Shared Create As String = "POST"
         Public Shared Read As String = "GET"
@@ -321,7 +331,7 @@ Public Class FrmMenu
         '
         ' Localizacion del directorio BaseDatos
         '
-        Fichero = My.Computer.FileSystem.SpecialDirectories.MyDocuments & "\MpmSystems\BaseApi.cfg"
+        Fichero = My.Computer.FileSystem.SpecialDirectories.MyDocuments & "\MpmSystems\BaseApiWoo.cfg"
         BaseDatos = ""
 
         If My.Computer.FileSystem.FileExists(Fichero) Then
@@ -329,6 +339,9 @@ Public Class FrmMenu
             BaseDatos = ObjFicheroL.ReadLine()
             ObjFicheroL.Close()
             ObjFicheroL.Dispose()
+
+            ' Normalizar ruta: eliminar barra final si existe
+            BaseDatos = BaseDatos.TrimEnd("\"c)
         End If
 
         If BaseDatos = "" Then
@@ -344,7 +357,8 @@ Public Class FrmMenu
                 If Mid(BaseDatos, X, 1) = "\" Then Exit For
             Next
 
-            BaseDatos = Mid(BaseDatos, 1, X)
+            ' Obtener solo el directorio (sin la barra final)
+            BaseDatos = Mid(BaseDatos, 1, X - 1)
 
             Dim ObjFicheroE As New StreamWriter(Fichero)
             ObjFicheroE.WriteLine(BaseDatos)
@@ -353,43 +367,57 @@ Public Class FrmMenu
         End If
 
         TextApi.Text = BaseDatos
+
+        EscribirLog($"Directorio de base de datos: {BaseDatos}")
+
         '
         ' Leemos la tabla API para obtener las rutas de WooCommerce y Facturascripts y las claves
         '
         Dim FicheroApi As String
         FicheroApi = BaseDatos & "\Api_Woocommerce.mdb"
 
+        EscribirLog($"Ruta fichero API: {FicheroApi}")
+
         If My.Computer.FileSystem.FileExists(FicheroApi) Then
-            Dim ObjFicheroApi As New OleDb.OleDbConnection("Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & FicheroApi)
-            ObjFicheroApi.Open()
+            Try
+                EscribirLog("Abriendo conexión para leer configuración API...")
+                Dim ObjFicheroApi As New OleDb.OleDbConnection("Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & FicheroApi)
+                ObjFicheroApi.Open()
 
-            ConsultaAcc1 = New OleDb.OleDbCommand("SELECT * FROM API", ObjFicheroApi)
-            ReaderAcc1 = ConsultaAcc1.ExecuteReader()
+                EscribirLog("✓ Conexión abierta. Leyendo tabla API...")
 
-            If ReaderAcc1.HasRows Then
-                ReaderAcc1.Read()
-                WebFs = ReaderAcc1("URLFS").ToString()
-                WebWoo = ReaderAcc1("URLWOO").ToString()
-                ClaveFs = ReaderAcc1("API").ToString()
-                ClaveWoo = ReaderAcc1("CK").ToString()
-                PassWoo = ReaderAcc1("CS").ToString()
-                WebId = ReaderAcc1("IDWEB").ToString()
+                ConsultaAcc1 = New OleDb.OleDbCommand("SELECT * FROM API", ObjFicheroApi)
+                ReaderAcc1 = ConsultaAcc1.ExecuteReader()
 
-                Traza.Text = WebFs & vbCrLf & WebWoo & vbCrLf
-            End If
+                If ReaderAcc1.HasRows Then
+                    ReaderAcc1.Read()
+                    WebFs = ReaderAcc1("URLFS").ToString()
+                    WebWoo = ReaderAcc1("URLWOO").ToString()
+                    ClaveFs = ReaderAcc1("API").ToString()
+                    ClaveWoo = ReaderAcc1("CK").ToString()
+                    PassWoo = ReaderAcc1("CS").ToString()
+                    WebId = ReaderAcc1("IDWEB").ToString()
 
-            ReaderAcc1.Close()
-            ObjFicheroApi.Close()
+                    EscribirLog($"✓ Configuración leída: WebId={WebId}, WebWoo={WebWoo}")
+
+                    Traza.Text = WebFs & vbCrLf & WebWoo & vbCrLf
+                Else
+                    EscribirLog("⚠ No se encontraron registros en la tabla API")
+                End If
+
+                ReaderAcc1.Close()
+                ObjFicheroApi.Close()
+
+                EscribirLog("✓ Conexión cerrada")
+            Catch ex As Exception
+                EscribirLog($"✗ ERROR al leer configuración API: {ex.Message}")
+                EscribirLog($"StackTrace: {ex.StackTrace}")
+            End Try
+        Else
+            EscribirLog($"✗ ERROR: No existe el fichero {FicheroApi}")
         End If
 
         Traza.Refresh()
-
-        ' Aplicar modo de visualización
-        ' Modo silencioso: no mostrar ventana
-        'Me.WindowState = FormWindowState.Minimized
-        '        Me.ShowInTaskbar = False
-        '        Me.Opacity = 0
-        '        Me.Visible = False
 
         ' Ejecutar comando
         If Environment.GetCommandLineArgs.Length > 1 Then
@@ -397,13 +425,29 @@ Public Class FrmMenu
             EscribirLog($"Argumento recibido: {Environment.GetCommandLineArgs(1)}")
 
             If UCase(Trim(Environment.GetCommandLineArgs(1))) = "ACTUALIZAR" Then
-                BtnActualizar.PerformClick()
-                BtnSalir.PerformClick()
-            End If
+                EscribirLog("Argumento detectado para actualizar pedidos. Iniciando proceso de actualización...")
+                ' Configurar para ejecutar después de que el formulario se muestre
+                AddHandler Me.Shown, Async Sub()
+                                         ' Modo silencioso: ocultar ventana DESPUÉS de Shown
+                                         Me.WindowState = FormWindowState.Minimized
+                                         Me.ShowInTaskbar = False
+                                         Me.Opacity = 0
 
-            If UCase(Trim(Environment.GetCommandLineArgs(1))) = "STOCK" Then
-                BtnStock.PerformClick()
-                BtnSalir.PerformClick()
+                                         EscribirLog("Formulario mostrado. Iniciando actualización...")
+                                         BtnActualizar.PerformClick()
+                                     End Sub
+            ElseIf UCase(Trim(Environment.GetCommandLineArgs(1))) = "STOCK" Then
+                EscribirLog("Argumento detectado para actualizar stock. Iniciando proceso de stock...")
+                ' Configurar para ejecutar después de que el formulario se muestre
+                AddHandler Me.Shown, Async Sub()
+                                         ' Modo silencioso: ocultar ventana DESPUÉS de Shown
+                                         Me.WindowState = FormWindowState.Minimized
+                                         Me.ShowInTaskbar = False
+                                         Me.Opacity = 0
+
+                                         EscribirLog("Formulario mostrado. Iniciando descarga de stock...")
+                                         BtnStock.PerformClick()
+                                     End Sub
             End If
         Else
             EscribirLog("No se recibieron argumentos. Iniciando en modo interactivo.")
@@ -515,7 +559,7 @@ Public Class FrmMenu
 
         ' Abrimos la conexión a la base de datos para cargar o mantener la tabla Pedidos
 
-        Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
+        Dim connString As String = GetConnectionString()
         Dim conn As New OleDb.OleDbConnection(connString)
         conn.Open()
 
@@ -594,10 +638,19 @@ Public Class FrmMenu
 
             Catch ex As TaskCanceledException
                 Traza.AppendText($"Timeout: {ex.Message}" & vbCrLf)
-                MsgBox("Se agotó el tiempo de espera al conectar con la API.", vbExclamation, "Timeout")
+                EscribirLog($"ERROR TaskCanceledException en BtnDescargar: {ex.Message}")
+                ' No mostrar MsgBox en modo silencioso
+                If Environment.GetCommandLineArgs().Length = 1 Then
+                    MsgBox("Se agotó el tiempo de espera al conectar con la API.", vbExclamation, "Timeout")
+                End If
             Catch ex As Exception
                 Traza.AppendText($"Excepción: {ex.Message}" & vbCrLf & ex.StackTrace & vbCrLf)
-                MsgBox($"Error de conexión: {ex.Message}", vbCritical, "Error")
+                EscribirLog($"ERROR Exception en BtnDescargar: {ex.Message}")
+                EscribirLog($"StackTrace: {ex.StackTrace}")
+                ' No mostrar MsgBox en modo silencioso
+                If Environment.GetCommandLineArgs().Length = 1 Then
+                    MsgBox($"Error de conexión: {ex.Message}", vbCritical, "Error")
+                End If
             End Try
 
             Traza.Text = "" ' Limpiar traza antes de mostrar resultados
@@ -616,6 +669,9 @@ Public Class FrmMenu
 
     Private Sub BtnStock_Click(sender As Object, e As EventArgs) Handles BtnStock.Click
         '
+        EscribirLog("=== INICIO BtnStock_Click ===")
+        Debug.Print("=== INICIO BtnStock_Click ===")
+
         Dim NumRegVariante As Long
 
         Traza.Text = "Descargando stock de FacturaScripts..." & vbCrLf
@@ -625,7 +681,7 @@ Public Class FrmMenu
         ApiVal = ClaveFs
 
         ' Abrimos la Base de datos para cargar o mantener la tabla Stock
-        Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
+        Dim connString As String = GetConnectionString()
         Dim conn As New OleDb.OleDbConnection(connString)
         conn.Open()
 
@@ -840,30 +896,60 @@ Public Class FrmMenu
         Traza.AppendText("-------------------------------" & vbCrLf)
         Traza.Text += "Stock descargado correctamente" & vbCrLf
         Traza.Refresh()
-        EscribirLog("Stock descargado correctamente")
+
+        EscribirLog("=== FIN BtnStock_Click ===")
+        Debug.Print("=== FIN BtnStock_Click ===")
+
         If Environment.GetCommandLineArgs().Length > 1 Then
-            End
+            EscribirLog("Cerrando aplicación tras ejecución con parámetros (STOCK)")
+            Debug.Print("Cerrando aplicación tras ejecución con parámetros (STOCK)")
+            Threading.Thread.Sleep(2000) ' Esperar 2 segundos para asegurar que se escriban los logs
+            Application.Exit()
         End If
 
     End Sub
 
     Private Async Sub BtnActualizar_Click(sender As Object, e As EventArgs) Handles BtnActualizar.Click
 
-        EscribirLog("Iniciando actualización de pedidos...")
+        EscribirLog("=== INICIO BtnActualizar_Click ===")
+        Debug.Print("=== INICIO BtnActualizar_Click ===")
 
         Dim LastPedido As String = ""
         Dim NumPedidos As Integer = 0
         Dim MaxPedido As String = ""
 
+        EscribirLog("Variables inicializadas")
+
         ' Abrimos la Base de datos para mantener la tabla Stock
-        Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
+        Dim connString As String = GetConnectionString()
+
         Dim conn As New OleDb.OleDbConnection(connString)
-        conn.Open()
+
+        EscribirLog($"Abriendo conexión a BD: {connString}")
+
+        Try
+            conn.Open()
+            EscribirLog("✓ Conexión a BD abierta exitosamente")
+        Catch ex As Exception
+            EscribirLog($"✗ ERROR al abrir conexión a BD: {ex.Message}")
+            EscribirLog($"StackTrace: {ex.StackTrace}")
+            Traza.AppendText($"ERROR al abrir BD: {ex.Message}" & vbCrLf)
+
+            ' Cerrar aplicación si es modo silencioso
+            If Environment.GetCommandLineArgs().Length > 1 Then
+                EscribirLog("Cerrando aplicación por error en BD")
+                Threading.Thread.Sleep(2000)
+                Application.Exit()
+            End If
+            Return
+        End Try
 
         ' Configuración de la API de WooCommerce
         Dim BaseUrl As String = WebWoo.TrimEnd("/"c) & "/wp-json/wc/v3/"
         Dim ConsumerKey As String = ClaveWoo
         Dim ConsumerSecret As String = PassWoo
+
+        EscribirLog($"Configuración API: {BaseUrl}")
 
         ' Leemos en Woocommerce cual es el últimopedido para tener un punto de fin en la actualización de pedidos.
 
@@ -881,6 +967,8 @@ Public Class FrmMenu
 
         Traza.Text = ""
 
+        EscribirLog("Iniciando cliente HTTP")
+
         Using client As New HttpClient(handler)
             client.Timeout = TimeSpan.FromSeconds(60)
             client.BaseAddress = New Uri(BaseUrl)
@@ -893,9 +981,15 @@ Public Class FrmMenu
             Traza.AppendText("Buscando ultimo pedido..." & vbCrLf)
             Traza.Refresh()
 
+            EscribirLog("Buscando último pedido...")
+
             Try
                 ' ✅ Credenciales como parámetros de URL (como funciona en el navegador)
+                EscribirLog($"Realizando petición GET: {Url}")
+
                 Dim resp As HttpResponseMessage = Await client.GetAsync(Url).ConfigureAwait(True)
+
+                EscribirLog($"Respuesta recibida: {CInt(resp.StatusCode)} {resp.StatusCode}")
 
                 Traza.AppendText($"Status Code: {CInt(resp.StatusCode)} {resp.StatusCode}" & vbCrLf)
                 Traza.Refresh()
@@ -913,11 +1007,23 @@ Public Class FrmMenu
                 pedidos.AddRange(pageOrders)
 
             Catch ex As TaskCanceledException
-                Traza.AppendText($"Timeout: {ex.Message}" & vbCrLf)
-                MsgBox("Se agotó el tiempo de espera al conectar con la API.", vbExclamation, "Timeout")
+                Dim mensaje As String = $"Timeout al buscar último pedido: {ex.Message}"
+                Traza.AppendText(mensaje & vbCrLf)
+                EscribirLog($"ERROR TaskCanceledException: {mensaje}")
+                EscribirLog($"StackTrace: {ex.StackTrace}")
+                ' No mostrar MsgBox en modo silencioso
+                If Environment.GetCommandLineArgs().Length = 1 Then
+                    MsgBox("Se agotó el tiempo de espera al conectar con la API.", vbExclamation, "Timeout")
+                End If
             Catch ex As Exception
-                Traza.AppendText($"Excepción: {ex.Message}" & vbCrLf & ex.StackTrace & vbCrLf)
-                MsgBox($"Error de conexión: {ex.Message}", vbCritical, "Error")
+                Dim mensaje As String = $"Excepción al buscar último pedido: {ex.Message}"
+                Traza.AppendText(mensaje & vbCrLf & ex.StackTrace & vbCrLf)
+                EscribirLog($"ERROR Exception: {mensaje}")
+                EscribirLog($"StackTrace: {ex.StackTrace}")
+                ' No mostrar MsgBox en modo silencioso
+                If Environment.GetCommandLineArgs().Length = 1 Then
+                    MsgBox($"Error de conexión: {ex.Message}", vbCritical, "Error")
+                End If
             End Try
         End Using
 
@@ -1063,15 +1169,20 @@ Public Class FrmMenu
         Traza.Text += "Pedidos actualizados correctamente" & vbCrLf
         Traza.Refresh()
 
-        EscribirLog("Actualización de pedidos finalizada.")
+        EscribirLog("Actualización de pedidos finalizada. Llamando a facturar...")
+        Debug.Print("Actualización de pedidos finalizada. Llamando a facturar...")
 
         BtnFacturar_Click(sender, e) ' llamamos a la función de facturar para facturar los pedidos que se han actualizado y los nuevos pedidos descargados
 
-        EscribirLog("Proceso de facturación finalizado.")
+        EscribirLog("=== FIN BtnActualizar_Click (con facturación) ===")
+        Debug.Print("=== FIN BtnActualizar_Click (con facturación) ===")
 
     End Sub
 
     Private Sub BtnFacturar_Click(sender As Object, e As EventArgs) Handles BtnFacturar.Click
+
+        EscribirLog("=== INICIO BtnFacturar_Click ===")
+        Debug.Print("=== INICIO BtnFacturar_Click ===")
 
         Dim Facturar As Boolean = False
 
@@ -1097,7 +1208,7 @@ Public Class FrmMenu
         Dim FechaPedido As String = ""
 
         ' Abrimos la Base de datos para seleccionar los pedidos que se van a facturar
-        Dim connString As String = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & BaseDatos & "\Api_Woocommerce.mdb"
+        Dim connString As String = GetConnectionString()
         Dim conn As New OleDb.OleDbConnection(connString)
         conn.Open()
 
@@ -1657,12 +1768,18 @@ Public Class FrmMenu
         Traza.Text += "Pedidos facturados correctamente" & vbCrLf
         Traza.Refresh()
 
+        EscribirLog("=== FIN BtnFacturar_Click ===")
+        Debug.Print("=== FIN BtnFacturar_Click ===")
+
         ' Si ha entrado con parametros, cerramos la aplicación al finalizar el proceso de facturación,
         ' para que pueda ser llamada desde un script externo y no quede abierta esperando a que el usuario
         ' la cierre manualmente.
 
         If Environment.GetCommandLineArgs().Length > 1 Then
-            End
+            EscribirLog("Cerrando aplicación tras ejecución con parámetros")
+            Debug.Print("Cerrando aplicación tras ejecución con parámetros")
+            Threading.Thread.Sleep(2000) ' Esperar 2 segundos para asegurar que se escriban los logs
+            Application.Exit()
         End If
 
     End Sub
@@ -1922,6 +2039,12 @@ Public Class FrmMenu
     Private Sub EscribirLog(mensaje As String)
 
         Try
+            ' Crear directorio si no existe
+            Dim dirLog As String = IO.Path.GetDirectoryName(FicheroLog)
+            If Not IO.Directory.Exists(dirLog) Then
+                IO.Directory.CreateDirectory(dirLog)
+            End If
+
             Using writer As New StreamWriter(FicheroLog, True, System.Text.Encoding.UTF8)
                 writer.WriteLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {mensaje}")
             End Using

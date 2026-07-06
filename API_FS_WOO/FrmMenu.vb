@@ -1043,7 +1043,7 @@ Public Class FrmMenu
         ' Para cada pedido de la tabla Pedidos, si el estado es distinto de "FACTURADO" y distinto de "OLD"
         ' lo actualizamos consultando el estado del pedido
         ' en la API de WooCommerce.
-        Dim cmd As New OleDb.OleDbCommand("SELECT Pedidos.IdPedido FROM Pedidos WHERE " &
+        Dim cmd As New OleDb.OleDbCommand("SELECT Pedidos.IdPedido, Pedidos.Estado FROM Pedidos WHERE " &
             "(" &
             "Pedidos.[Estado] <> 'OLD' " &
             "And Pedidos.[Estado] <> 'FACTURADO' " &
@@ -1058,11 +1058,19 @@ Public Class FrmMenu
         OldTraza = Traza.Text
         While reader.Read()
             Traza.Text = OldTraza
-            Traza.AppendText($"Pedido a actualizar: {reader("IdPedido").ToString()}" & vbCrLf)
+            Traza.AppendText($"Pedido a actualizar: {reader("IdPedido").ToString()} - {reader("Estado").ToString()}" & vbCrLf)
             pedidosActualizar.Add(reader("IdPedido").ToString())
             LastPedido = reader("IdPedido").ToString()
         End While
         reader.Close()
+
+        ' Si el parametro LastPedido es mayor que el último pedido de la tabla Pedidos, lo usamos como punto de partida para actualizar pedidos.
+        cmd = New OleDb.OleDbCommand("SELECT * FROM PARAMETROS WHERE NOMPAR = 'LASTPEDIDO'", conn)
+        Dim readerMax As OleDb.OleDbDataReader = cmd.ExecuteReader()
+        If readerMax.Read() Then
+            LastPedido = readerMax("VALPAR").ToString()
+        End If
+        readerMax.Close()
 
         Traza.Text = OldTraza
         Traza.AppendText($"Total pedidos a actualizar: {pedidosActualizar.Count}" & vbCrLf)

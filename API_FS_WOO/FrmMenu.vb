@@ -1060,17 +1060,9 @@ Public Class FrmMenu
             Traza.Text = OldTraza
             Traza.AppendText($"Pedido a actualizar: {reader("IdPedido").ToString()} - {reader("Estado").ToString()}" & vbCrLf)
             pedidosActualizar.Add(reader("IdPedido").ToString())
-            LastPedido = reader("IdPedido").ToString()
+            If reader("IdPedido").ToString() > LastPedido Then LastPedido = reader("IdPedido").ToString()
         End While
         reader.Close()
-
-        ' Si el parametro LastPedido es mayor que el último pedido de la tabla Pedidos, lo usamos como punto de partida para actualizar pedidos.
-        cmd = New OleDb.OleDbCommand("SELECT * FROM PARAMETROS WHERE NOMPAR = 'LASTPEDIDO'", conn)
-        Dim readerMax As OleDb.OleDbDataReader = cmd.ExecuteReader()
-        If readerMax.Read() Then
-            LastPedido = readerMax("VALPAR").ToString()
-        End If
-        readerMax.Close()
 
         Traza.Text = OldTraza
         Traza.AppendText($"Total pedidos a actualizar: {pedidosActualizar.Count}" & vbCrLf)
@@ -1081,6 +1073,7 @@ Public Class FrmMenu
 
         For NuevosPedidos = LastPedido + 1 To MaxPedido
             pedidosActualizar.Add(NuevosPedidos.ToString())
+            LastPedido = NuevosPedidos.ToString()
         Next
 
         Traza.Text = OldTraza

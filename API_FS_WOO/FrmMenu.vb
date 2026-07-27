@@ -2130,20 +2130,83 @@ Public Class FrmMenu
             Offset += NumReg
 
             For Each factura As JObject In JArray.Parse(response)
+                Dim facturaId As String = factura("idfactura").ToString()
+                Dim facturacodigo As String = factura("codigo").ToString()
                 Dim numero2 As String = factura("numero2").ToString()
-                'Dim idfactura As String = factura("idfactura").ToString()
-                'Dim codcliente As String = factura("codcliente").ToString()
-                'Dim nombre As String = factura("nombre").ToString()
-                'Dim fecha As String = factura("fecha").ToString()
-                'Dim hora As String = factura("hora").ToString()
-                'Dim total As String = factura("total").ToString()
-                'Dim codpago As String = factura("codpago").ToString()
-                'Traza.AppendText($"Pedido: {numero2}, Factura ID: {idfactura}, Cliente: {codcliente} - {nombre}, Fecha: {fecha} {hora}, Total: {total}, Forma de pago: {codpago}" & vbCrLf)
                 If numero2 = "" Then Exit Do
                 Traza.AppendText($"Pedido: {numero2}" & vbCrLf)
+                Dim createdByUserId As String = Nothing
+                Dim IdTpv As Integer = 0
+                Dim Terminal As String = ""
+
+                Call GetUser(facturaId, numero2, createdByUserId, IdTpv, Terminal)
+
+                Traza.Text &= $"{facturaId} {facturacodigo} Pedido: {numero2} Creado por usuario ID: {createdByUserId} Tpv {IdTpv} Terminal {Terminal}" & vbCrLf
+                Traza.Refresh()
             Next
 
         Loop Until NumReg = 0
+
+    End Sub
+
+    Public Sub GetUser(Idfactura As Integer, NumPedido As String, ByRef Usuario As String, ByRef IdTpv As Integer, ByRef Terminal As String)
+
+        Dim URL As String = WebFs
+        Usuario = ""
+        IdTpv = 0
+        Terminal = ""
+
+        Dim Pedido As JObject = LeerPedidoWoo(NumPedido)
+
+        Dim lineas As JArray = Pedido("line_items")
+        If lineas.ToString <> "[]" Then
+            Dim metadatos As JArray = lineas(0)("meta_data")
+
+            Debug.Print(metadatos.ToString())
+
+            ' Buscamos el meta_data con la clave "_created_by_user_id" para obtener el id del usuario que creó el pedido.
+            For Each meta As JObject In metadatos
+                If meta("key").ToString() = "_created_by_user_id" Then
+                    Usuario = meta("value").ToString()
+                    Exit For
+                End If
+            Next
+
+        End If
+
+        ' Si usuario no es vacio buscamos en parametros el id del tpv que tiene asignado ese usuario
+
+        If Usuario <> "" Then
+            Dim FicheroApi As String
+            FicheroApi = BaseDatos & "\Api_Woocommerce.mdb"
+            Dim ObjFicheroApi As New OleDb.OleDbConnection("Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & FicheroApi)
+            ObjFicheroApi.Open()
+
+            Dim cmd As New OleDb.OleDbCommand("Select VALPAR, DESPAR FROM PARAMETROS WHERE NOMPAR = 'USER" & Usuario & "'", ObjFicheroApi)
+            Dim reader As OleDb.OleDbDataReader = cmd.ExecuteReader()
+            If reader.Read() Then
+                IdTpv = Convert.ToInt32(reader("VALPAR"))
+                Terminal = reader("DESPAR").ToString()
+                'If IdTpv <> 0 Then
+                '    Dim ActualizarJson As String = JsonConvert.SerializeObject(New With {
+                '            .idtpv = IdTpv
+                '        })
+                '    Dim urlActualizar As String = URL.TrimEnd("/"c) & "/api/3/facturaclientes/" & Idfactura
+                '    Dim resultado As String = ActualizarApi(urlActualizar, ActualizarJson)
+
+                '    If Not String.IsNullOrEmpty(resultado) Then
+                '        Traza.AppendText($"✓ Factura {Idfactura} actualizada (Tpv={IdTpv})" & vbCrLf)
+                '    Else
+                '        Traza.AppendText($"✗ Error al actualizar factura {Idfactura }" & vbCrLf)
+                '    End If
+
+                '    Debug.Print($"Resultado al actualizar factura {Idfactura}: {resultado}")
+                '    Debug.Print("")
+                'End If
+            End If
+            reader.Close()
+            ObjFicheroApi.Close()
+        End If
 
     End Sub
 End Class

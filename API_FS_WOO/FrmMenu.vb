@@ -2022,7 +2022,24 @@ Public Class FrmMenu
             End If
         Next
 
-        Traza.Text &= vbCrLf & $"Creado por usuario ID: {createdByUserId}" & vbCrLf
+        Dim FicheroApi As String
+        FicheroApi = BaseDatos & "\Api_Woocommerce.mdb"
+        Dim ObjFicheroApi As New OleDb.OleDbConnection("Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & FicheroApi)
+        ObjFicheroApi.Open()
+
+        Dim IdTpv As Integer = 0
+        Dim Terminal As String = ""
+
+        Dim cmd As New OleDb.OleDbCommand("Select VALPAR, DESPAR FROM PARAMETROS WHERE NOMPAR = 'USER" & createdByUserId & "'", ObjFicheroApi)
+        Dim reader As OleDb.OleDbDataReader = cmd.ExecuteReader()
+        If reader.Read() Then
+            IdTpv = Convert.ToInt32(reader("VALPAR"))
+            Terminal = reader("DESPAR").ToString()
+        End If
+        reader.Close()
+        ObjFicheroApi.Close()
+
+        Traza.Text &= vbCrLf & $"Creado por usuario ID: {createdByUserId} - TPV: {IdTpv} - Terminal: {Terminal}" & vbCrLf
 
     End Sub
 

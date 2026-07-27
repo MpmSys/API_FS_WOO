@@ -1846,6 +1846,7 @@ Public Class FrmMenu
             BtnBoceto.Enabled = Not BtnBoceto.Enabled
             BtnClientes.Enabled = Not BtnClientes.Enabled
             BtnPedido.Enabled = Not BtnPedido.Enabled
+            BtnUser.Enabled = Not BtnUser.Enabled
         End If
     End Sub
 
@@ -1969,6 +1970,22 @@ Public Class FrmMenu
         Traza.Text = $"Pedido {idPedido} - Cliente: {pedido("billing")("email").ToString()} - Total: {pedido("total").ToString()}" & vbCrLf
         Traza.Text &= JsonConvert.SerializeObject(pedido, Formatting.Indented)
 
+        Dim lineas As JArray = pedido("line_items")
+        Dim metadatos As JArray = lineas(0)("meta_data")
+
+        Debug.Print(metadatos.ToString())
+
+        ' Buscamos el meta_data con la clave "_created_by_user_id" para obtener el id del usuario que creó el pedido.
+        Dim createdByUserId As String = Nothing
+        For Each meta As JObject In metadatos
+            If meta("key").ToString() = "_created_by_user_id" Then
+                createdByUserId = meta("value").ToString()
+                Exit For
+            End If
+        Next
+
+        Traza.Text &= vbCrLf & $"Creado por usuario ID: {createdByUserId}" & vbCrLf
+
     End Sub
 
     Private currentLine As Integer = 0
@@ -2055,4 +2072,40 @@ Public Class FrmMenu
 
     End Sub
 
+    Private Sub BtnUser_Click(sender As Object, e As EventArgs) Handles BtnUser.Click
+        ' A traves de la APi de FacturaScripts, obtenemos los pedidos que tienen informado el campo numero2,
+        ' que es el campo que usamos para guardar el id del pedido de WooCommerce, y que nos permite relacionar
+        ' los pedidos de WooCommerce con las facturas de FacturaScripts.
+
+        Offset = 0
+        ApiVal = ClaveFs
+
+        Do
+            ' BaseURL de la API de FacturaScripts
+            Dim BaseUrl As String = WebFs.TrimEnd("/"c) & "/api/3/facturaclientes?offset=" & Offset & "&sort[numero2]=DESC"
+
+            Dim response As String = LeerApi(BaseUrl)
+            Traza.Text += "Lectura " & NumReg & " desde " & Offset & " de " & TotalReg & " disponibles" & vbCrLf
+            Traza.Refresh()
+            'EscribirLog($"Lectura {NumReg} desde {Offset} de {TotalReg} disponibles")
+
+            Offset += NumReg
+
+            For Each factura As JObject In JArray.Parse(response)
+                Dim numero2 As String = factura("numero2").ToString()
+                'Dim idfactura As String = factura("idfactura").ToString()
+                'Dim codcliente As String = factura("codcliente").ToString()
+                'Dim nombre As String = factura("nombre").ToString()
+                'Dim fecha As String = factura("fecha").ToString()
+                'Dim hora As String = factura("hora").ToString()
+                'Dim total As String = factura("total").ToString()
+                'Dim codpago As String = factura("codpago").ToString()
+                'Traza.AppendText($"Pedido: {numero2}, Factura ID: {idfactura}, Cliente: {codcliente} - {nombre}, Fecha: {fecha} {hora}, Total: {total}, Forma de pago: {codpago}" & vbCrLf)
+                If numero2 = "" Then Exit Do
+                Traza.AppendText($"Pedido: {numero2}" & vbCrLf)
+            Next
+
+        Loop Until NumReg = 0
+
+    End Sub
 End Class

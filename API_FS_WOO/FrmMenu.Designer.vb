@@ -35,6 +35,7 @@ Partial Class FrmMenu
         Me.BtnClientes = New System.Windows.Forms.Button()
         Me.BtnPedido = New System.Windows.Forms.Button()
         Me.BtnPrint = New System.Windows.Forms.Button()
+        Me.BtnUser = New System.Windows.Forms.Button()
         Me.SuspendLayout()
         '
         'Traza
@@ -165,11 +166,24 @@ Partial Class FrmMenu
         Me.BtnPrint.Text = "Imprimir Textos"
         Me.BtnPrint.UseVisualStyleBackColor = True
         '
+        'BtnUser
+        '
+        Me.BtnUser.Enabled = False
+        Me.BtnUser.Image = CType(resources.GetObject("BtnUser.Image"), System.Drawing.Image)
+        Me.BtnUser.ImageAlign = System.Drawing.ContentAlignment.TopLeft
+        Me.BtnUser.Location = New System.Drawing.Point(152, 382)
+        Me.BtnUser.Name = "BtnUser"
+        Me.BtnUser.Size = New System.Drawing.Size(123, 68)
+        Me.BtnUser.TabIndex = 57
+        Me.BtnUser.Text = "Actualizar USER"
+        Me.BtnUser.UseVisualStyleBackColor = True
+        '
         'FrmMenu
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1329, 606)
+        Me.Controls.Add(Me.BtnUser)
         Me.Controls.Add(Me.BtnPrint)
         Me.Controls.Add(Me.BtnPedido)
         Me.Controls.Add(Me.BtnClientes)
@@ -200,4 +214,5 @@ Partial Class FrmMenu
     Friend WithEvents BtnClientes As Button
     Friend WithEvents BtnPedido As Button
     Friend WithEvents BtnPrint As Button
+    Friend WithEvents BtnUser As Button
 End Class

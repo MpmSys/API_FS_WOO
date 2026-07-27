@@ -455,6 +455,22 @@ Public Class FrmMenu
     End Sub
 
     Private Sub BtnSalir_Click(sender As Object, e As EventArgs) Handles BtnSalir.Click
+        ' Borramos los ficheros de c:\Logs con una antiguedad mayor a 30 dias
+        Try
+            Dim logDirectory As String = "C:\Logs"
+            If My.Computer.FileSystem.DirectoryExists(logDirectory) Then
+                For Each file As String In My.Computer.FileSystem.GetFiles(logDirectory)
+                    Dim fileInfo As New FileInfo(file)
+                    If fileInfo.LastWriteTime < DateTime.Now.AddDays(-30) Then
+                        My.Computer.FileSystem.DeleteFile(file)
+                        EscribirLog($"Fichero de log eliminado: {file}")
+                    End If
+                Next
+            End If
+        Catch ex As Exception
+            EscribirLog($"Error al limpiar ficheros de log antiguos: {ex.Message}")
+        End Try
+
         End
     End Sub
 
@@ -1257,6 +1273,28 @@ Public Class FrmMenu
             Traza.Refresh()
 
             EscribirLog($"Facturando pedido {idPedido}...")
+
+            ' Miramos con la API de FacturaScripts si el pedido ya ha sido facturado. Para esto, buscamos en la tabla pedidos de la API de FacturaScripts
+            ' si existe un pedido con el mismo idpedido.
+            Dim UrlPedidoFs As String = URL.TrimEnd("/"c) & "/api/3/facturaclientes?filter[numero2]=" & idPedido
+            Dim PedidoFs As String = LeerApi(UrlPedidoFs, API)
+
+            If PedidoFs <> "[]" Then
+                Traza.AppendText($"Pedido {idPedido} ya facturado en FacturaScripts, no se facturará de nuevo." & vbCrLf)
+                Traza.Refresh()
+                Dim fechaActual As DateTime = DateTime.Now
+                Dim updateCmd As New OleDb.OleDbCommand($"UPDATE Pedidos SET Estado = 'FACTURADO', Fecha = #{fechaActual:MM/dd/yyyy HH:mm:ss}# WHERE IdWeb = @IdWeb AND IdPedido = @IdPedido", conn)
+                updateCmd.Parameters.AddWithValue("@IdWeb", WebId)
+                updateCmd.Parameters.AddWithValue("@IdPedido", idPedido)
+                updateCmd.ExecuteNonQuery()
+
+                Traza.AppendText($"✓ Pedido {idPedido} facturado correctamente" & vbCrLf)
+                Debug.Print($"Pedido {idPedido} marcado como FACTURADO")
+                ' Vamos al siguiente pedido sin facturar este pedido ya que ya está facturado en FacturaScripts
+                Continue For
+            End If
+
+
 
             Dim pedido As Object = Nothing
             pedido = LeerPedidoWoo(idPedido)

@@ -2008,19 +2008,22 @@ Public Class FrmMenu
         Traza.Text = $"Pedido {idPedido} - Cliente: {pedido("billing")("email").ToString()} - Total: {pedido("total").ToString()}" & vbCrLf
         Traza.Text &= JsonConvert.SerializeObject(pedido, Formatting.Indented)
 
-        Dim lineas As JArray = pedido("line_items")
-        Dim metadatos As JArray = lineas(0)("meta_data")
-
-        Debug.Print(metadatos.ToString())
-
-        ' Buscamos el meta_data con la clave "_created_by_user_id" para obtener el id del usuario que creó el pedido.
         Dim createdByUserId As String = Nothing
-        For Each meta As JObject In metadatos
-            If meta("key").ToString() = "_created_by_user_id" Then
-                createdByUserId = meta("value").ToString()
-                Exit For
-            End If
-        Next
+
+        Dim lineas As JArray = pedido("line_items")
+        If lineas.ToString <> "[]" Then
+            Dim metadatos As JArray = lineas(0)("meta_data")
+
+            Debug.Print(metadatos.ToString())
+
+            ' Buscamos el meta_data con la clave "_created_by_user_id" para obtener el id del usuario que creó el pedido.
+            For Each meta As JObject In metadatos
+                If meta("key").ToString() = "_created_by_user_id" Then
+                    createdByUserId = meta("value").ToString()
+                    Exit For
+                End If
+            Next
+        End If
 
         Dim FicheroApi As String
         FicheroApi = BaseDatos & "\Api_Woocommerce.mdb"

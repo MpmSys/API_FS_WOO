@@ -195,8 +195,24 @@ Public Class FrmMenu
             StrDataRes = Reader.ReadToEnd()
             Reader.Close()
 
+        Catch wex As WebException
+            ' Leemos el cuerpo de la respuesta de error para ver el motivo real que devuelve FacturaScripts
+            Dim cuerpoError As String = ""
+            Dim codigo As String = ""
+            If wex.Response IsNot Nothing Then
+                Dim errResp As HttpWebResponse = TryCast(wex.Response, HttpWebResponse)
+                If errResp IsNot Nothing Then codigo = CInt(errResp.StatusCode) & " " & errResp.StatusDescription
+                Using sr As New StreamReader(wex.Response.GetResponseStream())
+                    cuerpoError = sr.ReadToEnd()
+                End Using
+            End If
+            Traza.AppendText($"ActualizarApi FacturaScripts ERROR {codigo}" & vbCrLf & RequestURL & vbCrLf &
+                             $"Datos: {postData}" & vbCrLf & $"Respuesta: {cuerpoError}" & vbCrLf & wex.Message & vbCrLf)
+            EscribirLog($"ActualizarApi ERROR {codigo} {RequestURL} Datos: {postData} Respuesta: {cuerpoError} {wex.Message}")
+            StrDataRes = ""
         Catch ex As Exception
-            Traza.Text += "ActualizarApi FacturaScript " & vbCrLf & RequestURL & vbCrLf & ex.ToString & vbCrLf
+            Traza.AppendText("ActualizarApi FacturaScripts " & vbCrLf & RequestURL & vbCrLf & ex.ToString & vbCrLf)
+            EscribirLog($"ActualizarApi ERROR {RequestURL} {ex.Message}")
             StrDataRes = ""
         End Try
 
@@ -1271,7 +1287,6 @@ Public Class FrmMenu
         For Each idPedido As String In pedidosAFacturar
             Traza.Text = ($"Facturando pedido {idPedido}..." & vbCrLf)
             Traza.Refresh()
-
             EscribirLog($"Facturando pedido {idPedido}...")
 
             ' Miramos con la API de FacturaScripts si el pedido ya ha sido facturado. Para esto, buscamos en la tabla pedidos de la API de FacturaScripts
@@ -1685,6 +1700,23 @@ Public Class FrmMenu
                 .lineas = LineasPedidoJson
             })
 
+            ' Obtenemos el almacen segun el usuario que creó el pedido en WooCommerce (sin actualizar, la factura aún no existe)
+            Dim UsuarioWoo As String = ""
+            Dim IdTpv As Integer = 0
+            Dim Terminal As String = ""
+            Dim CodAlmacen As String = ""
+            GetUser(0, idPedido, UsuarioWoo, IdTpv, Terminal, CodAlmacen)
+
+            ' Solo enviamos codalmacen si tiene valor, si no FacturaScripts usa el almacen por defecto
+            If CodAlmacen <> "" Then
+                Dim facturaObj As JObject = JObject.Parse(FacturaJson)
+                facturaObj("codalmacen") = CodAlmacen
+                FacturaJson = facturaObj.ToString(Newtonsoft.Json.Formatting.None)
+            End If
+
+            Traza.AppendText($"Usuario Woo: {UsuarioWoo} Terminal: {Terminal} Almacen: {CodAlmacen}" & vbCrLf)
+            EscribirLog($"Pedido {idPedido}: Usuario Woo {UsuarioWoo} Terminal {Terminal} Almacen {CodAlmacen}")
+
             LastFecha = datePedido.ToString("yyyy-MM-dd HH: mm:ss")
             LastFecha = FechaPedido
 
@@ -1722,6 +1754,13 @@ Public Class FrmMenu
                             .idestado = 11,
                             .editable = 1
                         })
+
+                        ' Aseguramos el almacen por si crearFacturaCliente lo ha ignorado
+                        If CodAlmacen <> "" Then
+                            Dim actualizarObj As JObject = JObject.Parse(ActualizarJson)
+                            actualizarObj("codalmacen") = CodAlmacen
+                            ActualizarJson = actualizarObj.ToString(Newtonsoft.Json.Formatting.None)
+                        End If
 
                         Dim urlActualizar As String = URL.TrimEnd("/"c) & "/api/3/facturaclientes/" & idfactura
                         Dim resultado As String = ActualizarApi(urlActualizar, ActualizarJson)
@@ -2137,6 +2176,7 @@ Public Class FrmMenu
 
         Offset = 0
         ApiVal = ClaveFs
+        Dim NumRegPagina As Integer = 0
 
         Do
             ' BaseURL de la API de FacturaScripts
@@ -2148,33 +2188,111 @@ Public Class FrmMenu
             'EscribirLog($"Lectura {NumReg} desde {Offset} de {TotalReg} disponibles")
 
             Offset += NumReg
+            ' Guardamos NumReg porque ActualizarApi (dentro de GetUser) lo pone a 0
+            NumRegPagina = NumReg
 
             For Each factura As JObject In JArray.Parse(response)
                 Dim facturaId As String = factura("idfactura").ToString()
                 Dim facturacodigo As String = factura("codigo").ToString()
                 Dim numero2 As String = factura("numero2").ToString()
                 If numero2 = "" Then Exit Do
-                Traza.AppendText($"Pedido: {numero2}" & vbCrLf)
+                Traza.AppendText($"Pedido: {numero2}-")
                 Dim createdByUserId As String = Nothing
                 Dim IdTpv As Integer = 0
                 Dim Terminal As String = ""
+                Dim Almacen As String = ""
 
-                Call GetUser(facturaId, numero2, createdByUserId, IdTpv, Terminal)
+                Call GetUser(facturaId, numero2, createdByUserId, IdTpv, Terminal, Almacen, factura)
 
-                Traza.Text &= $"{facturaId} {facturacodigo} Pedido: {numero2} Creado por usuario ID: {createdByUserId} Tpv {IdTpv} Terminal {Terminal}" & vbCrLf
+                Traza.Text &= $"{facturaId} {facturacodigo} Creado por usuario ID: {createdByUserId} Tpv {IdTpv} Almacen {Almacen}" & vbCrLf
                 Traza.Refresh()
             Next
 
-        Loop Until NumReg = 0
+        Loop Until NumRegPagina = 0
 
     End Sub
 
-    Public Sub GetUser(Idfactura As Integer, NumPedido As String, ByRef Usuario As String, ByRef IdTpv As Integer, ByRef Terminal As String)
+    ' Proceso puntual para normalizar facturas existentes: actualiza codalmacen.
+    ' Si la factura no es editable, la pasa temporalmente a su estado anterior (idestado_ant),
+    ' cambia el almacen y la devuelve a su estado original.
+    Private Sub ActualizarAlmacenFactura(Idfactura As Integer, Almacen As String, Factura As JObject)
+
+        Dim urlFactura As String = WebFs.TrimEnd("/"c) & "/api/3/facturaclientes/" & Idfactura
+        ApiVal = ClaveFs
+
+        If Factura Is Nothing Then
+            Dim lectura As String = LeerApi(urlFactura)
+            If String.IsNullOrEmpty(lectura) Then
+                EscribirLog($"✗ Factura {Idfactura}: no se ha podido leer")
+                Exit Sub
+            End If
+            Factura = JObject.Parse(lectura)
+        End If
+
+        Dim almacenActual As String = If(Factura("codalmacen") Is Nothing, "", Factura("codalmacen").ToString())
+        If almacenActual = Almacen Then
+            Traza.AppendText($"= Factura {Idfactura} ya tiene almacen {Almacen}" & vbCrLf)
+            Exit Sub
+        End If
+
+        Dim editable As Boolean = Factura("editable") IsNot Nothing AndAlso Factura("editable").Type <> JTokenType.Null AndAlso CBool(Factura("editable"))
+        Dim estadoOrig As String = If(Factura("idestado") Is Nothing, "", Factura("idestado").ToString())
+        Dim estadoEdit As String = If(Factura("idestado_ant") Is Nothing, "", Factura("idestado_ant").ToString())
+
+        If editable Then
+            Dim res As String = ActualizarApi(urlFactura, JsonConvert.SerializeObject(New With {.codalmacen = Almacen}))
+            If res <> "" Then
+                Traza.AppendText($"✓ Factura {Idfactura}: almacen {almacenActual} -> {Almacen}" & vbCrLf)
+                EscribirLog($"Factura {Idfactura}: almacen {almacenActual} -> {Almacen}")
+            Else
+                EscribirLog($"✗ Error al actualizar codalmacen {Almacen} en factura {Idfactura}")
+            End If
+            Exit Sub
+        End If
+
+        ' No editable: necesitamos un estado anterior distinto al actual para desbloquearla
+        If estadoEdit = "" OrElse estadoEdit = estadoOrig Then
+            Traza.AppendText($"✗ Factura {Idfactura} no editable y sin estado anterior (idestado_ant). Revisar a mano." & vbCrLf)
+            EscribirLog($"✗ Factura {Idfactura} no editable y sin idestado_ant. Almacen {Almacen} no aplicado")
+            Exit Sub
+        End If
+
+        ' 1. Pasamos a estado editable
+        Dim resEdit As String = ActualizarApi(urlFactura, JsonConvert.SerializeObject(New With {.idestado = estadoEdit}))
+        If resEdit = "" Then
+            EscribirLog($"✗ Factura {Idfactura}: no se ha podido pasar a estado {estadoEdit}. Almacen no aplicado")
+            Exit Sub
+        End If
+
+        ' 2. Cambiamos el almacen
+        ApiVal = ClaveFs
+        Dim resAlm As String = ActualizarApi(urlFactura, JsonConvert.SerializeObject(New With {.codalmacen = Almacen}))
+
+        ' 3. Restauramos siempre el estado original, aunque haya fallado el cambio de almacen
+        ApiVal = ClaveFs
+        Dim resRest As String = ActualizarApi(urlFactura, JsonConvert.SerializeObject(New With {.idestado = estadoOrig}))
+
+        If resAlm <> "" Then
+            Traza.AppendText($"✓ Factura {Idfactura}: almacen {almacenActual} -> {Almacen} (estado {estadoOrig}->{estadoEdit}->{estadoOrig})" & vbCrLf)
+            EscribirLog($"Factura {Idfactura}: almacen {almacenActual} -> {Almacen} (estado temporal {estadoEdit})")
+        Else
+            EscribirLog($"✗ Error al actualizar codalmacen {Almacen} en factura {Idfactura}")
+        End If
+
+        If resRest = "" Then
+            Traza.AppendText($"‼ Factura {Idfactura}: NO se ha podido restaurar el estado {estadoOrig}. Revisar a mano." & vbCrLf)
+            EscribirLog($"‼ Factura {Idfactura}: NO se ha podido restaurar el estado {estadoOrig}. Queda en estado {estadoEdit}")
+        End If
+
+    End Sub
+
+    Public Sub GetUser(Idfactura As Integer, NumPedido As String, ByRef Usuario As String, ByRef IdTpv As Integer, ByRef Terminal As String, ByRef Almacen As String, Optional Factura As JObject = Nothing)
 
         Dim URL As String = WebFs
         Usuario = ""
         IdTpv = 0
         Terminal = ""
+        Almacen = ""
 
         Dim Pedido As JObject = LeerPedidoWoo(NumPedido)
 
@@ -2202,27 +2320,18 @@ Public Class FrmMenu
             Dim ObjFicheroApi As New OleDb.OleDbConnection("Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" & FicheroApi)
             ObjFicheroApi.Open()
 
-            Dim cmd As New OleDb.OleDbCommand("Select VALPAR, DESPAR FROM PARAMETROS WHERE NOMPAR = 'USER" & Usuario & "'", ObjFicheroApi)
+            Dim cmd As New OleDb.OleDbCommand("Select * FROM PARAMETROS WHERE NOMPAR = 'USER" & Usuario & "'", ObjFicheroApi)
             Dim reader As OleDb.OleDbDataReader = cmd.ExecuteReader()
             If reader.Read() Then
                 IdTpv = Convert.ToInt32(reader("VALPAR"))
                 Terminal = reader("DESPAR").ToString()
-                'If IdTpv <> 0 Then
-                '    Dim ActualizarJson As String = JsonConvert.SerializeObject(New With {
-                '            .idtpv = IdTpv
-                '        })
-                '    Dim urlActualizar As String = URL.TrimEnd("/"c) & "/api/3/facturaclientes/" & Idfactura
-                '    Dim resultado As String = ActualizarApi(urlActualizar, ActualizarJson)
-
-                '    If Not String.IsNullOrEmpty(resultado) Then
-                '        Traza.AppendText($"✓ Factura {Idfactura} actualizada (Tpv={IdTpv})" & vbCrLf)
-                '    Else
-                '        Traza.AppendText($"✗ Error al actualizar factura {Idfactura }" & vbCrLf)
-                '    End If
-
-                '    Debug.Print($"Resultado al actualizar factura {Idfactura}: {resultado}")
-                '    Debug.Print("")
-                'End If
+                Almacen = reader("ALMACEN").ToString()
+                ' Actualizamos el campo Almacen -> codalmacen con la Api de facturascripts la tabla facturaclientes,
+                ' para que quede registrado el almacen desde el que se ha facturado el pedido.
+                ' Si Idfactura = 0 solo obtenemos el almacen sin actualizar (factura aun no creada).
+                If Almacen <> "" AndAlso Idfactura > 0 Then
+                    ActualizarAlmacenFactura(Idfactura, Almacen, Factura)
+                End If
             End If
             reader.Close()
             ObjFicheroApi.Close()
